@@ -1,0 +1,139 @@
+import re
+import random
+from django.contrib.auth.models import User
+
+
+def validate_phone_number(phone):
+    """
+    اعتبارسنجی شماره تلفن
+    فرمت‌های مجاز: 09123456789, +989123456789, 00989123456789
+    """
+    if not phone:
+        return False, "شماره تلفن خالی است"
+
+    # حذف فاصله‌ها و کاراکترهای اضافی
+    phone = re.sub(r'[\s\-\(\)]', '', phone)
+
+    # بررسی فرمت‌های مختلف شماره تلفن ایرانی
+    patterns = [
+        r'^09\d{9}$',  # 09123456789
+        r'^\+989\d{9}$',  # +989123456789
+        r'^00989\d{9}$',  # 00989123456789
+    ]
+
+    for pattern in patterns:
+        if re.match(pattern, phone):
+            return True, phone
+
+    return False, "فرمت شماره تلفن نامعتبر است"
+
+
+def normalize_phone_number(phone):
+    """
+    نرمال‌سازی شماره تلفن به فرمت استاندارد 09xxxxxxxxx
+    """
+    if not phone:
+        return phone
+
+    # حذف فاصله‌ها و کاراکترهای اضافی
+    phone = re.sub(r'[\s\-\(\)]', '', phone)
+
+    # تبدیل به فرمت استاندارد
+    if phone.startswith('+98'):
+        phone = '0' + phone[3:]
+    elif phone.startswith('0098'):
+        phone = '0' + phone[4:]
+    elif phone.startswith('98') and len(phone) == 12:
+        phone = '0' + phone[2:]
+
+    return phone
+
+
+def generate_secure_password(length=12):
+    """
+    تولید رمز عبور امن
+    """
+    import string
+    characters = string.ascii_letters + string.digits + "!@#$%^&*"
+    return ''.join(random.choice(characters) for _ in range(length))
+
+
+def is_caller_user(user):
+    """
+    بررسی اینکه آیا کاربر یک تماس‌گیرنده است یا خیر
+    تماس‌گیرندگان: کاربرانی که is_staff=False و is_superuser=False هستند
+    """
+    return not user.is_staff and not user.is_superuser and user.is_active
+
+
+def get_available_callers_for_project(project):
+    """
+    دریافت لیست تماس‌گیرندگان فعال برای یک پروژه
+    """
+    from .models import ProjectCaller
+
+    project_callers = ProjectCaller.objects.filter(
+        project=project,
+        is_active=True
+    ).select_related('caller')
+
+    return [pc.caller for pc in project_callers if is_caller_user(pc.caller)]
+
+
+def assign_contacts_randomly(project, unassigned_contacts=None):
+    """
+    تخصیص تصادفی مخاطبین به تماس‌گیرندگان
+    """
+    from .models import Contact
+
+    if unassigned_contacts is None:
+        unassigned_contacts = Contact.objects.filter(
+            project=project,
+            assigned_caller__isnull=True
+        )
+
+    available_callers = get_available_callers_for_project(project)
+
+    if not available_callers:
+        return 0, "هیچ تماس‌گیرنده فعالی برای این پروژه یافت نشد"
+
+    assigned_count = 0
+    for contact in unassigned_contacts:
+        # انتخاب تصادفی یک تماس‌گیرنده
+        assigned_caller = random.choice(available_callers)
+        contact.assigned_caller = assigned_caller
+        contact.save()
+        assigned_count += 1
+
+    return assigned_count, f"{assigned_count} مخاطب به صورت تصادفی تخصیص داده شد"
+
+
+def validate_excel_data(df, required_columns, optional_columns=None):
+    """
+    اعتبارسنجی داده‌های اکسل
+    """
+    if optional_columns is None:
+        optional_columns = []
+
+    errors = []
+
+    # بررسی وجود ستون‌های الزامی
+    missing_columns = [col for col in required_columns if col not in df.columns]
+    if missing_columns:
+        errors.append(f"ستون‌های الزامی یافت نشد: {', '.join(missing_columns)}")
+
+    # بررسی خالی نبودن DataFrame
+    if df.empty:
+        errors.append("فایل خالی است")
+
+    return errors
+
+
+def clean_string_field(value):
+    """
+    تمیز کردن فیلدهای متنی
+    """
+    if value is None or str(value).strip().lower() in ['nan', 'none', '']:
+        return None
+    return str(value).strip()
+
