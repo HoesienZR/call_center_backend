@@ -38,19 +38,24 @@ def login(request):
     """
     ورود کاربر و دریافت توکن
     """
-    username = request.data.get('username')
+    email = request.data.get('email')
     password = request.data.get('password')
 
-    if username is None or password is None:
+    if email is None or password is None:
         return Response({
-            'error': 'نام کاربری و رمز عبور الزامی است'
+            'error': 'ایمیل و رمز عبور الزامی است'
         }, status=status.HTTP_400_BAD_REQUEST)
 
-    user = authenticate(username=username, password=password)
+    # Try to find user by email
+    try:
+        user_obj = User.objects.get(email=email)
+        user = authenticate(username=user_obj.username, password=password)
+    except User.DoesNotExist:
+        user = None
 
     if not user:
         return Response({
-            'error': 'نام کاربری یا رمز عبور اشتباه است'
+            'error': 'ایمیل یا رمز عبور اشتباه است'
         }, status=status.HTTP_401_UNAUTHORIZED)
 
     if not user.is_active:
@@ -135,4 +140,5 @@ def register(request):
         'username': user.username,
         'email': user.email,
     }, status=status.HTTP_201_CREATED)
+
 

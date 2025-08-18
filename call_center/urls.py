@@ -19,7 +19,7 @@ router.register(r'cached-statistics', views.CachedStatisticsViewSet)
 urlpatterns = [
     path('', include(router.urls)),
     # Authentication URLs
-    path('auth/login/', auth_views.login, name='api_login'),
+    path("auth/login", auth_views.login, name="api_login"),
     path('auth/logout/', auth_views.logout, name='api_logout'),
     path('auth/profile/', auth_views.user_profile, name='api_user_profile'),
     path('auth/register/', auth_views.register, name='api_register'),
