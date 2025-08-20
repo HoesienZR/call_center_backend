@@ -40,7 +40,7 @@ def login(request):
     """
     email = request.data.get('email')
     password = request.data.get('password')
-
+    print("email",email,"password",password)
     if email is None or password is None:
         return Response({
             'error': 'ایمیل و رمز عبور الزامی است'
@@ -49,11 +49,15 @@ def login(request):
     # Try to find user by email
     try:
         user_obj = User.objects.get(email=email)
+        print(user_obj)
         user = authenticate(username=user_obj.username, password=password)
+        print (user)
     except User.DoesNotExist:
+        print("user set to none ")
         user = None
 
     if not user:
+        print('errorایمیل یا رمز عبور اشتباه است')
         return Response({
             'error': 'ایمیل یا رمز عبور اشتباه است'
         }, status=status.HTTP_401_UNAUTHORIZED)
