@@ -1,5 +1,7 @@
 from rest_framework import serializers
 from django.contrib.auth.models import User
+from rest_framework.fields import SerializerMethodField
+
 from .models import (
     Project, ProjectCaller, Contact, Call, CallEditHistory,
     CallStatistics, SavedSearch, UploadedFile, ExportReport, CachedStatistics
@@ -24,12 +26,26 @@ class ProjectSerializer(serializers.ModelSerializer):
     created_by_id = serializers.PrimaryKeyRelatedField(
         queryset=User.objects.all(), source='created_by', write_only=True, required=False
     )
-
+    contacts_count = serializers.SerializerMethodField()
+    callers_count = serializers.SerializerMethodField()
+    completed_calls_count = serializers.SerializerMethodField()
+    calls_count = serializers.SerializerMethodField()
+    def get_completed_calls_count(self, obj):
+        return obj.calls.filter(status="completed").count()
+    def get_calls_count(self,obj):
+        return obj.calls.count()
+    def get_callers_count(self,obj):
+        return obj.project_callers.count()
+    def get_contacts_count(self,obj):
+        return obj.contacts.count()
     class Meta:
         model = Project
         fields = (
             'id', 'name', 'description', 'status', 'created_by',
-            'created_by_id', 'created_at', 'updated_at'
+            'created_by_id', 'created_at', 'updated_at',
+            'contacts_count',"callers_count",'calls_count',
+            "completed_calls_count"
+
         )
         read_only_fields = ('created_at', 'updated_at')
 
@@ -54,14 +70,14 @@ class ProjectCallerSerializer(serializers.ModelSerializer):
 
 
 class ContactSerializer(serializers.ModelSerializer):
-    assigned_caller = UserSerializer(read_only=True)
-    assigned_caller_id = serializers.PrimaryKeyRelatedField(
-        queryset=User.objects.all(), source='assigned_caller', write_only=True, allow_null=True, required=False
-    )
-    project = ProjectSerializer(read_only=True)
-    project_id = serializers.PrimaryKeyRelatedField(
-        queryset=Project.objects.all(), source='project', write_only=True
-    )
+    #assigned_caller = UserSerializer(read_only=True)
+    #assigned_caller_id = serializers.PrimaryKeyRelatedField(
+    #    queryset=User.objects.all(), source='assigned_caller', write_only=True, allow_null=True, required=False
+    #)
+    #project = ProjectSerializer(read_only=True)
+    #project_id = serializers.PrimaryKeyRelatedField(
+    #    queryset=Project.objects.all(), source='project', write_only=True
+    #)
     custom_fields = serializers.JSONField(binary=False, required=False)
 
     class Meta:
@@ -100,7 +116,7 @@ class CallSerializer(serializers.ModelSerializer):
             'project_id', 'call_date', 'call_result', 'notes', 'duration',
             'follow_up_required', 'follow_up_date', 'is_editable',
             'edited_at', 'edited_by', 'edited_by_id', 'edit_reason',
-            'original_data', 'created_at'
+            'original_data', 'created_at','status'
         )
         read_only_fields = ('call_date', 'created_at', 'edited_at')
 

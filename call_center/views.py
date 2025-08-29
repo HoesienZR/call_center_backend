@@ -42,7 +42,8 @@ class ProjectViewSet(viewsets.ModelViewSet):
     queryset = Project.objects.all()
     serializer_class = ProjectSerializer
     permission_classes = [IsAuthenticated]
-
+    def get_queryset(self):
+        return self.queryset.filter(created_by=self.request.user)
     def perform_create(self, serializer):
         serializer.save(created_by=self.request.user)
 
@@ -161,10 +162,28 @@ class ContactViewSet(viewsets.ModelViewSet):
             return queryset
         # Callers can only see contacts assigned to them or unassigned contacts in their projects
         user_projects = self.request.user.project_assignments.filter(is_active=True).values_list("project_id",
-                                                                                                 flat=True)
+                                                                       flat=True)
+        print(user_projects)
         return queryset.filter(project__in=user_projects).filter(
             models.Q(assigned_caller=self.request.user) | models.Q(assigned_caller__isnull=True))
+    @action(detail=False,methods=['get'],permission_classes=[IsAuthenticated],url_path="by_projects/(?P<project_id>\d+)",url_name='by-project')
+    def get_project_contacts(self,request,project_id=None):
+        try:
+            project = Project.objects.get(id=project_id)
+        except Project.DoesNotExist:
+            return Response({"detail": "پروژه یافت نشد."}, status=status.HTTP_404_NOT_FOUND)
+        if self.request.user==project.created_by:
+            contacts = Contact.objects.filter(project=project)
+            print(contacts)
+            serializer = ContactSerializer(contacts, many=True)
+            return Response(serializer.data)
 
+
+        else:
+            return Response({'detail':"شما به این پروژ دسترسی ندارید "},status=status.HTTP_403_FORBIDDEN)
+
+
+        pass
     @action(detail=True, methods=["get"], permission_classes=[IsAuthenticated])
     def call_statistics(self, request, pk=None):
         contact = self.get_object()
