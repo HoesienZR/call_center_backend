@@ -1,3 +1,5 @@
+from django.db.models import Q
+from django.utils.dateparse import parse_date
 from rest_framework import viewsets, status
 from rest_framework.response import Response
 from rest_framework.decorators import action
@@ -7,7 +9,9 @@ from django.db import models
 from django.db import transaction
 from django.conf import settings
 from django.core.files.storage import FileSystemStorage
+from django.utils import timezone
 from datetime import datetime
+from .permission import IsRegularUser,IsAdminOrCaller
 import pandas as pd
 import os
 import uuid
@@ -36,17 +40,74 @@ class UserViewSet(viewsets.ReadOnlyModelViewSet):
     queryset = User.objects.all()
     serializer_class = UserSerializer
     permission_classes = [IsAdminUser]
-
-
 class ProjectViewSet(viewsets.ModelViewSet):
     queryset = Project.objects.all()
     serializer_class = ProjectSerializer
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsAuthenticated,IsAdminOrCaller]
     def get_queryset(self):
-        return self.queryset.filter(created_by=self.request.user)
+        user = self.request.user
+        if user.is_superuser:
+            return self.queryset
+        return self.queryset.filter(
+            Q(created_by=user) | Q(project_callers__caller=user, project_callers__is_active=True)
+        ).distinct()
     def perform_create(self, serializer):
         serializer.save(created_by=self.request.user)
+    @action(detail=True, methods=['get'],permission_classes = [IsAuthenticated],url_path='project_report',
+            url_name = 'project-report')
+    def project_report(self, request, pk=None):
+        project = self.get_object()
+        # Get start_date and end_date from query parameters
+        start_date = request.query_params.get('start_date')
+        end_date = request.query_params.get('end_date')
+        print(start_date, end_date)
 
+        # Base queryset for calls
+        calls_queryset = project.calls.all()
+        print(calls_queryset)
+        # Apply date filters if provided
+        if start_date:
+            try:
+                start_date = parse_date(start_date)
+                if start_date:
+                    calls_queryset = calls_queryset.filter(call_date__gte=start_date)
+                else:
+                    return Response({'error': 'Invalid start_date format. Use YYYY-MM-DD.'},
+                                    status=status.HTTP_400_BAD_REQUEST)
+            except ValueError:
+                return Response({'error': 'Invalid start_date format. Use YYYY-MM-DD.'},
+                                status=status.HTTP_400_BAD_REQUEST)
+        if end_date:
+            try:
+                end_date = parse_date(end_date)
+                if end_date:
+                    calls_queryset = calls_queryset.filter(call_date__lte=end_date)
+                else:
+                    return Response({'error': 'Invalid end_date format. Use YYYY-MM-DD.'},
+                                    status=status.HTTP_400_BAD_REQUEST)
+            except ValueError:
+                return Response({'error': 'Invalid end_date format. Use YYYY-MM-DD.'},
+                                status=status.HTTP_400_BAD_REQUEST)
+        # Calculate report metrics
+        calls_count = calls_queryset.count()
+        answered_calls_count = calls_queryset.filter(call_result='answered').count()
+        answered_calls_rate = int((answered_calls_count / calls_count * 100) if calls_count > 0 else 0)
+        not_interested_calls_count = calls_queryset.filter(call_result='not_interested').count()
+        interested_calls_count = calls_queryset.filter(call_result='interested').count()
+
+        # Include the filtered calls in the response
+        calls_serializer = CallSerializer(calls_queryset, many=True)
+        return Response({
+            'project': ProjectSerializer(project).data,
+            'reports': {
+                'total_calls': calls_count,
+                'answered_calls': answered_calls_count,
+                'answered_calls_rate': answered_calls_rate,
+                'interested_calls': interested_calls_count,
+                'not_interested_calls': not_interested_calls_count,
+            },
+            'calls': calls_serializer.data
+        }, status=status.HTTP_200_OK)
     @action(detail=True, methods=["get"], permission_classes=[IsAuthenticated])
     def statistics(self, request, pk=None):
         project = self.get_object()
@@ -148,7 +209,7 @@ class ProjectViewSet(viewsets.ModelViewSet):
 class ProjectCallerViewSet(viewsets.ModelViewSet):
     queryset = ProjectCaller.objects.all()
     serializer_class = ProjectCallerSerializer
-    permission_classes = [IsAdminUser]
+    permission_classes = [IsAdminUser,IsAuthenticated,IsAdminOrCaller]
 
 
 class ContactViewSet(viewsets.ModelViewSet):
@@ -163,27 +224,42 @@ class ContactViewSet(viewsets.ModelViewSet):
         # Callers can only see contacts assigned to them or unassigned contacts in their projects
         user_projects = self.request.user.project_assignments.filter(is_active=True).values_list("project_id",
                                                                        flat=True)
-        print(user_projects)
         return queryset.filter(project__in=user_projects).filter(
             models.Q(assigned_caller=self.request.user) | models.Q(assigned_caller__isnull=True))
-    @action(detail=False,methods=['get'],permission_classes=[IsAuthenticated],url_path="by_projects/(?P<project_id>\d+)",url_name='by-project')
-    def get_project_contacts(self,request,project_id=None):
+
+    def create(self, request, *args, **kwargs):
+        logger.info(f"Incoming request data: {request.data}")
+        serializer = self.get_serializer(data=request.data)
+        if not serializer.is_valid():
+            logger.error(f"Serializer errors: {serializer.errors}")
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+        self.perform_create(serializer)
+        headers = self.get_success_headers(serializer.data)
+        return Response(serializer.data, status=status.HTTP_201_CREATED, headers=headers)
+    @action(detail=False, methods=['get'], permission_classes=[IsAuthenticated,IsAdminOrCaller],
+            url_path="by_projects/(?P<project_id>\d+)", url_name='by-project')
+    def get_project_contacts(self, request, project_id=None):
         try:
             project = Project.objects.get(id=project_id)
         except Project.DoesNotExist:
             return Response({"detail": "پروژه یافت نشد."}, status=status.HTTP_404_NOT_FOUND)
-        if self.request.user==project.created_by:
-            contacts = Contact.objects.filter(project=project)
-            print(contacts)
-            serializer = ContactSerializer(contacts, many=True)
+        # شرط اصلاح‌شده: کاربر سازنده پروژه باشد یا تماس‌گیرنده فعال پروژه باشد
+        if self.request.user == project.created_by or project.project_callers.filter(caller=request.user,is_active=True).exists():
+
+            serializer = ProjectSerializer(project,)
             return Response(serializer.data)
-
-
         else:
-            return Response({'detail':"شما به این پروژ دسترسی ندارید "},status=status.HTTP_403_FORBIDDEN)
-
-
-        pass
+            return Response({"detail": "شما به این پروژه دسترسی ندارید."}, status=status.HTTP_403_FORBIDDEN)
+    @action(detail=False,methods=['get'],permission_classes = [IsAuthenticated, IsAdminOrCaller],
+            url_name='pending-caller-contacts',url_path="caller_pending_contact/(?P<project_id>\d+)")
+    def pending_contacts(self, request, project_id=None):
+        try:
+            project = Project.objects.get(id=project_id)
+        except Project.DoesNotExist:
+            return Response({"detail": "پروژه یافت نشد."}, status=status.HTTP_404_NOT_FOUND)
+        caller_pending_contacts = Contact.objects.filter(project=project,call_status='pending',assigned_caller=request.user)
+        serializer = ContactSerializer(caller_pending_contacts,many=True)
+        return Response(serializer.data)
     @action(detail=True, methods=["get"], permission_classes=[IsAuthenticated])
     def call_statistics(self, request, pk=None):
         contact = self.get_object()
@@ -215,14 +291,14 @@ class ContactViewSet(viewsets.ModelViewSet):
         if not active_projects:
             return Response({"detail": "شما به هیچ پروژه‌ای تخصیص داده نشده‌اید یا در پروژه‌ای فعال نیستید."},
                             status=status.HTTP_404_NOT_FOUND)
-
+        print(active_projects)
         # اولویت ۱: مخاطبین تخصیص داده شده به این تماس‌گیرنده که هنوز تماس گرفته نشده‌اند یا نیاز به پیگیری دارند
         contact = Contact.objects.filter(
             project__in=active_projects,
             assigned_caller=user,
             call_status__in=["pending", "follow_up"]
         ).order_by("last_call_date").first()
-
+        print(contact)
         if not contact:
             # اولویت ۲: مخاطبین تخصیص داده نشده در پروژه‌های این تماس‌گیرنده
             contact = Contact.objects.filter(
@@ -230,7 +306,6 @@ class ContactViewSet(viewsets.ModelViewSet):
                 assigned_caller__isnull=True,
                 call_status="pending"
             ).order_by("created_at").first()
-
             if contact:
                 # تخصیص مخاطب به تماس‌گیرنده
                 contact.assigned_caller = user
@@ -242,7 +317,93 @@ class ContactViewSet(viewsets.ModelViewSet):
 
         return Response({"detail": "هیچ مخاطب جدیدی برای تماس یافت نشد."}, status=status.HTTP_404_NOT_FOUND)
 
+    @action(detail=False, methods=["post"], permission_classes=[IsAuthenticated, IsAdminOrCaller],
+            url_path="remove_assigned_caller/(?P<contact_id>\d+)", url_name="remove-assigned_caller")
+    def remove_assigned_caller(self, request, contact_id=None):
+        """
+        حذف تماس‌گیرنده تخصیص‌یافته از یک مخاطب خاص.
+        """
+        try:
 
+            contact = Contact.objects.get(id=contact_id)
+        except Contact.DoesNotExist:
+            return Response({"detail": "مخاطب یافت نشد."}, status=status.HTTP_404_NOT_FOUND)
+
+        project = contact.project
+        # بررسی دسترسی: کاربر باید ادمین، سازنده پروژه، یا تماس‌گیرنده فعال پروژه باشد
+        if (project.project_callers.filter(caller=request.user, is_active=True).exists() or request.user.is_staff):
+            if contact.assigned_caller:
+                caller = contact.assigned_caller
+                # ثبت لاگ
+                contact.assigned_caller = None
+
+                contact.save()
+                return Response({"detail": f"تماس‌گیرنده از مخاطب {contact.full_name} حذف شد."},
+                                status=status.HTTP_200_OK)
+            else:
+                return Response({"detail": "این مخاطب تماس‌گیرنده‌ای ندارد."}, status=status.HTTP_400_BAD_REQUEST)
+        else:
+            return Response({"detail": "شما به این پروژه دسترسی ندارید."}, status=status.HTTP_403_FORBIDDEN)
+
+    @action(detail=True, methods=["post"], permission_classes=[IsAuthenticated,],
+            url_path="submit_call_feedback", url_name="submit-call-feedback")
+    def submit_call_feedback(self, request, pk=None):
+        """
+        ثبت بازخورد تماس برای یک مخاطب خاص.
+        """
+        try:
+            contact = self.get_object()
+        except Contact.DoesNotExist:
+            return Response({"detail": "مخاطب یافت نشد."}, status=status.HTTP_404_NOT_FOUND)
+
+        project = contact.project
+        # بررسی دسترسی
+        if not (request.user.is_staff or
+                request.user == project.created_by or
+                project.project_callers.filter(caller=request.user, is_active=True).exists() or
+                contact.assigned_caller == request.user):
+            return Response({"detail": "شما به این پروژه یا مخاطب دسترسی ندارید."}, status=status.HTTP_403_FORBIDDEN)
+        serializer = CallSerializer(data={
+            'contact_id': contact.id,
+            'project_id': project.id,
+            'caller_id': request.user.id,
+            'status': request.data.get('status'),
+            'call_result': request.data.get('result', ''),
+            'notes': request.data.get('notes', ''),
+            'follow_up_date': request.data.get('follow_up_date', None),
+            'follow_up_notes': request.data.get('follow_up_notes', ''),
+            'duration': request.data.get('duration', 0),
+            'is_editable': True,
+            'feedback': request.data.get('notes', ''),  # نگاشت notes به feedback
+            'detailed_report': request.data.get('notes', ''),  # نگاشت notes به detailed_report
+        })
+
+        if serializer.is_valid():
+            serializer.save(caller=request.user)
+
+            # به‌روزرسانی call_status مخاطب
+            call_status_map = {
+                'answered': 'completed' if request.data.get('result') in ['callback_requested',
+                                                                          'answered'] else 'not_interested',
+                'no_answer': 'pending',
+                'busy': 'pending',
+                'unreachable': 'pending',
+                'wrong_number': 'not_interested',
+                'not_interested': 'not_interested',
+                'callback_requested': 'follow_up',
+            }
+            new_call_status = call_status_map.get(request.data.get('result'), 'pending')
+
+            contact.call_status = new_call_status
+            contact.last_call_date = timezone.now()
+            contact.save()
+
+            # ثبت لاگ
+            return Response({"detail": "بازخورد تماس با موفقیت ثبت شد.", "data": serializer.data},
+                            status=status.HTTP_201_CREATED)
+        else:
+            return Response({"detail": "خطا در داده‌های ارسالی", "errors": serializer.errors},
+                            status=status.HTTP_400_BAD_REQUEST)
 class CallViewSet(viewsets.ModelViewSet):
     queryset = Call.objects.all()
     serializer_class = CallSerializer
@@ -300,9 +461,8 @@ class CallViewSet(viewsets.ModelViewSet):
             return Response({"detail": "شما مجاز به ثبت بازخورد برای این تماس نیستید."},
                             status=status.HTTP_403_FORBIDDEN)
 
-        feedback_text = request.data.get("feedback_text")
-        call_status = request.data.get("call_status")
-
+        feedback_text = request.data.get("notes")
+        call_status = request.data.get("status")
         if not feedback_text and not call_status:
             return Response({"error": "حداقل یکی از فیلدهای feedback_text یا call_status الزامی است."},
                             status=status.HTTP_400_BAD_REQUEST)
@@ -376,11 +536,10 @@ class SavedSearchViewSet(viewsets.ModelViewSet):
 class UploadedFileViewSet(viewsets.ReadOnlyModelViewSet):
     queryset = UploadedFile.objects.all()
     serializer_class = UploadedFileSerializer
-    permission_classes = [IsAdminUser]
+    permission_classes = [IsAuthenticated, IsAdminOrCaller]  # اصلاح مجوزها
 
     def allowed_file(self, filename):
-        return "." in filename and \
-            filename.rsplit(".", 1)[1].lower() in ["xlsx", "xls", "csv"]
+        return "." in filename and filename.rsplit(".", 1)[1].lower() in ["xlsx", "xls", "csv"]
 
     def ensure_upload_folder(self):
         upload_path = os.path.join(settings.MEDIA_ROOT, "uploads")
@@ -391,23 +550,26 @@ class UploadedFileViewSet(viewsets.ReadOnlyModelViewSet):
     def save_uploaded_file(self, file, project, file_type):
         """ذخیره فایل آپلود شده با نام یکتا"""
         upload_path = self.ensure_upload_folder()
-
-        # ایجاد نام فایل یکتا
         file_extension = file.name.rsplit(".", 1)[1].lower()
         unique_filename = f"{project.id}_{file_type}_{uuid.uuid4().hex[:8]}.{file_extension}"
-
         fs = FileSystemStorage(location=upload_path)
         filename = fs.save(unique_filename, file)
         return os.path.join(upload_path, filename)
 
-    @action(detail=False, methods=["post"], permission_classes=[IsAdminUser])
+    @action(detail=False, methods=["post"], permission_classes=[IsAuthenticated,])
     def upload_contacts(self, request):
+        """
+        آپلود فایل اکسل مخاطبین و تخصیص تماس‌گیرندگان.
+        - تمام مخاطبین ایجاد می‌شوند، حتی با داده‌های ناقص.
+        - اگر assigned_caller_username خالی یا نامعتبر باشد، تماس‌گیرنده به‌صورت تصادفی تخصیص می‌یابد.
+        """
         if "file" not in request.FILES:
             return Response({"error": "فایل ارسال نشده است"}, status=status.HTTP_400_BAD_REQUEST)
 
         file = request.FILES["file"]
         project_id = request.data.get("project_id")
-        auto_assign = request.data.get("auto_assign", "false").lower() == "true"
+        # تخصیص خودکار به‌صورت پیش‌فرض فعال است
+        auto_assign = True
 
         if not project_id:
             return Response({"error": "شناسه پروژه الزامی است"}, status=status.HTTP_400_BAD_REQUEST)
@@ -417,6 +579,12 @@ class UploadedFileViewSet(viewsets.ReadOnlyModelViewSet):
         except Project.DoesNotExist:
             return Response({"error": "پروژه یافت نشد"}, status=status.HTTP_404_NOT_FOUND)
 
+        # بررسی دسترسی
+        if not (request.user.is_staff or
+                request.user == project.created_by or
+                project.project_callers.filter(caller=request.user, is_active=True).exists()):
+            return Response({"detail": "شما به این پروژه دسترسی ندارید."}, status=status.HTTP_403_FORBIDDEN)
+
         if not self.allowed_file(file.name):
             return Response({"error": "فرمت فایل نامعتبر است. فقط xlsx, xls, csv مجاز هستند."},
                             status=status.HTTP_400_BAD_REQUEST)
@@ -425,8 +593,8 @@ class UploadedFileViewSet(viewsets.ReadOnlyModelViewSet):
         file_path = self.save_uploaded_file(file, project, "contacts")
 
         contacts_added = 0
-        contacts_skipped = 0
         contacts_updated = 0
+        contacts_skipped = 0
         errors = []
         unassigned_contacts = []
 
@@ -453,20 +621,19 @@ class UploadedFileViewSet(viewsets.ReadOnlyModelViewSet):
                 for index, row in df.iterrows():
                     try:
                         # تمیز کردن داده‌ها
-                        full_name = clean_string_field(row["full_name"])
-                        phone = clean_string_field(row["phone"])
+                        full_name = clean_string_field(row.get("full_name", "نامشخص"))
+                        phone = clean_string_field(row.get("phone", ""))
 
-                        if not full_name or not phone:
-                            contacts_skipped += 1
-                            errors.append(f"ردیف {index + 2}: نام یا شماره تلفن خالی است.")
-                            continue
+                        # مدیریت شماره تلفن خالی
+                        if not phone:
+                            phone = f"unknown_{uuid.uuid4().hex[:8]}"
+                            errors.append(f"ردیف {index + 2}: شماره تلفن خالی بود، مقدار پیش‌فرض '{phone}' استفاده شد.")
 
                         # اعتبارسنجی و نرمال‌سازی شماره تلفن
                         is_valid, normalized_phone = validate_phone_number(phone)
                         if not is_valid:
-                            contacts_skipped += 1
-                            errors.append(f"ردیف {index + 2}: {normalized_phone}")
-                            continue
+                            errors.append(f"ردیف {index + 2}: شماره تلفن نامعتبر: {normalized_phone}")
+                            normalized_phone = phone  # استفاده از مقدار خام در صورت نامعتبر بودن
 
                         phone = normalize_phone_number(normalized_phone)
 
@@ -488,6 +655,10 @@ class UploadedFileViewSet(viewsets.ReadOnlyModelViewSet):
                                         custom_fields[col] = value
                             existing_contact.custom_fields = custom_fields
 
+                            # اگر مخاطب موجود تماس‌گیرنده ندارد، برای تخصیص تصادفی اضافه می‌شود
+                            if not existing_contact.assigned_caller:
+                                unassigned_contacts.append(existing_contact)
+
                             existing_contact.save()
                             contacts_updated += 1
                             continue
@@ -498,7 +669,9 @@ class UploadedFileViewSet(viewsets.ReadOnlyModelViewSet):
                             full_name=full_name,
                             phone=phone,
                             email=clean_string_field(row.get("email")),
-                            address=clean_string_field(row.get("address"))
+                            address=clean_string_field(row.get("address")),
+                            call_status='pending',
+                            is_active=True
                         )
 
                         # تخصیص تماس‌گیرنده (اگر مشخص شده)
@@ -507,19 +680,20 @@ class UploadedFileViewSet(viewsets.ReadOnlyModelViewSet):
                             try:
                                 assigned_caller = User.objects.get(username=assigned_caller_username)
                                 if is_caller_user(assigned_caller):
-                                    # بررسی اینکه تماس‌گیرنده در این پروژه فعال است
-                                    if ProjectCaller.objects.filter(project=project, caller=assigned_caller,
-                                                                    is_active=True).exists():
+                                    if ProjectCaller.objects.filter(project=project, caller=assigned_caller, is_active=True).exists():
                                         contact.assigned_caller = assigned_caller
                                     else:
-                                        errors.append(
-                                            f"ردیف {index + 2}: تماس‌گیرنده {assigned_caller_username} در این پروژه فعال نیست.")
+                                        errors.append(f"ردیف {index + 2}: تماس‌گیرنده {assigned_caller_username} در این پروژه فعال نیست.")
+                                        unassigned_contacts.append(contact)
                                 else:
-                                    errors.append(
-                                        f"ردیف {index + 2}: کاربر {assigned_caller_username} یک تماس‌گیرنده نیست.")
+                                    errors.append(f"ردیف {index + 2}: کاربر {assigned_caller_username} یک تماس‌گیرنده نیست.")
+                                    unassigned_contacts.append(contact)
                             except User.DoesNotExist:
-                                errors.append(
-                                    f"ردیف {index + 2}: تماس‌گیرنده با نام کاربری {assigned_caller_username} یافت نشد.")
+                                errors.append(f"ردیف {index + 2}: تماس‌گیرنده با نام کاربری {assigned_caller_username} یافت نشد.")
+                                unassigned_contacts.append(contact)
+                        else:
+                            # اگر تماس‌گیرنده مشخص نشده، به لیست تخصیص تصادفی اضافه می‌شود
+                            unassigned_contacts.append(contact)
 
                         # فیلدهای سفارشی
                         custom_fields = {}
@@ -533,19 +707,16 @@ class UploadedFileViewSet(viewsets.ReadOnlyModelViewSet):
                         contact.save()
                         contacts_added += 1
 
-                        # اگر تماس‌گیرنده تخصیص نداده شده، به لیست اضافه کن
-                        if not contact.assigned_caller:
-                            unassigned_contacts.append(contact)
-
                     except Exception as e:
                         contacts_skipped += 1
                         errors.append(f"ردیف {index + 2}: خطا در پردازش - {str(e)}")
                         logger.error(f"Error processing row {index + 2}: {str(e)}")
 
-            # تخصیص تصادفی مخاطبین (اگر درخواست شده)
+            # تخصیص تصادفی مخاطبین بدون تماس‌گیرنده
             auto_assigned_count = 0
-            if auto_assign and unassigned_contacts:
+            if unassigned_contacts:
                 auto_assigned_count, assign_message = assign_contacts_randomly(project, unassigned_contacts)
+                # ثبت لاگ برای تخصیص
 
             # ثبت اطلاعات فایل آپلود شده
             uploaded_file_record = UploadedFile.objects.create(
@@ -562,12 +733,10 @@ class UploadedFileViewSet(viewsets.ReadOnlyModelViewSet):
                 "contacts_added": contacts_added,
                 "contacts_updated": contacts_updated,
                 "contacts_skipped": contacts_skipped,
+                "auto_assigned_count": auto_assigned_count,
                 "total_rows": len(df),
                 "file_id": uploaded_file_record.id
             }
-
-            if auto_assign:
-                response_data["auto_assigned_count"] = auto_assigned_count
 
             if errors:
                 response_data["errors"] = errors[:20]  # محدود کردن خطاها به 20 مورد اول
@@ -577,162 +746,6 @@ class UploadedFileViewSet(viewsets.ReadOnlyModelViewSet):
 
         except Exception as e:
             logger.error(f"Error processing contacts file: {str(e)}")
-            # حذف فایل در صورت خطا
-            if os.path.exists(file_path):
-                os.remove(file_path)
-            return Response({"error": f"خطا در پردازش فایل: {str(e)}"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
-
-    @action(detail=False, methods=["post"], permission_classes=[IsAdminUser])
-    def upload_callers(self, request):
-        if "file" not in request.FILES:
-            return Response({"error": "فایل ارسال نشده است"}, status=status.HTTP_400_BAD_REQUEST)
-
-        file = request.FILES["file"]
-        project_id = request.data.get("project_id")
-        generate_passwords = request.data.get("generate_passwords", "false").lower() == "true"
-
-        if not project_id:
-            return Response({"error": "شناسه پروژه الزامی است"}, status=status.HTTP_400_BAD_REQUEST)
-
-        try:
-            project = Project.objects.get(id=project_id)
-        except Project.DoesNotExist:
-            return Response({"error": "پروژه یافت نشد"}, status=status.HTTP_404_NOT_FOUND)
-
-        if not self.allowed_file(file.name):
-            return Response({"error": "فرمت فایل نامعتبر است. فقط xlsx, xls, csv مجاز هستند."},
-                            status=status.HTTP_400_BAD_REQUEST)
-
-        # ذخیره فایل
-        file_path = self.save_uploaded_file(file, project, "callers")
-
-        callers_added = 0
-        callers_assigned = 0
-        callers_updated = 0
-        callers_skipped = 0
-        errors = []
-        generated_passwords = {}
-
-        try:
-            # خواندن فایل
-            if file.name.endswith(".csv"):
-                df = pd.read_csv(file_path, encoding='utf-8')
-            else:
-                df = pd.read_excel(file_path)
-
-            # اعتبارسنجی ساختار فایل
-            required_columns = ["username", "full_name"]
-            if not generate_passwords:
-                required_columns.append("password")
-
-            validation_errors = validate_excel_data(df, required_columns)
-
-            if validation_errors:
-                return Response({
-                    "error": "; ".join(validation_errors),
-                    "required_columns": required_columns,
-                    "found_columns": list(df.columns)
-                }, status=status.HTTP_400_BAD_REQUEST)
-
-            # پردازش داده‌ها
-            with transaction.atomic():
-                for index, row in df.iterrows():
-                    try:
-                        # تمیز کردن داده‌ها
-                        username = clean_string_field(row["username"])
-                        full_name = clean_string_field(row["full_name"])
-
-                        if not username or not full_name:
-                            callers_skipped += 1
-                            errors.append(f"ردیف {index + 2}: نام کاربری یا نام کامل خالی است.")
-                            continue
-
-                        # تولید یا دریافت رمز عبور
-                        if generate_passwords:
-                            password = generate_secure_password()
-                            generated_passwords[username] = password
-                        else:
-                            password = clean_string_field(row.get("password"))
-                            if not password:
-                                callers_skipped += 1
-                                errors.append(f"ردیف {index + 2}: رمز عبور خالی است.")
-                                continue
-
-                        # ایجاد یا به‌روزرسانی کاربر
-                        user, created = User.objects.get_or_create(username=username)
-
-                        # تنظیم اطلاعات کاربر
-                        name_parts = full_name.split(" ", 1)
-                        user.first_name = name_parts[0]
-                        user.last_name = name_parts[1] if len(name_parts) > 1 else ""
-
-                        email = clean_string_field(row.get("email"))
-                        if email and (not user.email or user.email == ""):
-                            user.email = email
-
-                        user.set_password(password)
-                        user.is_active = True
-                        user.is_staff = False  # تماس‌گیرندگان staff نیستند
-                        user.is_superuser = False
-                        user.save()
-
-                        if created:
-                            callers_added += 1
-                        else:
-                            callers_updated += 1
-
-                        # تخصیص به پروژه
-                        project_caller, assigned_created = ProjectCaller.objects.get_or_create(
-                            project=project,
-                            caller=user,
-                            defaults={'is_active': True}
-                        )
-
-                        if assigned_created:
-                            callers_assigned += 1
-                        elif not project_caller.is_active:
-                            project_caller.is_active = True
-                            project_caller.save()
-                            callers_assigned += 1
-
-                    except Exception as e:
-                        callers_skipped += 1
-                        errors.append(f"ردیف {index + 2}: خطا در پردازش - {str(e)}")
-                        logger.error(f"Error processing caller row {index + 2}: {str(e)}")
-
-            # ثبت اطلاعات فایل آپلود شده
-            uploaded_file_record = UploadedFile.objects.create(
-                project=project,
-                file_name=file.name,
-                file_path=file_path,
-                file_type="callers",
-                uploaded_by=request.user,
-                records_count=callers_added + callers_updated
-            )
-
-            response_data = {
-                "message": "فایل با موفقیت پردازش شد.",
-                "callers_added": callers_added,
-                "callers_updated": callers_updated,
-                "callers_assigned": callers_assigned,
-                "callers_skipped": callers_skipped,
-                "total_rows": len(df),
-                "file_id": uploaded_file_record.id
-            }
-
-            if generate_passwords and generated_passwords:
-                response_data["generated_passwords"] = generated_passwords
-                response_data["password_note"] = "رمزهای عبور تولید شده را در جای امنی ذخیره کنید."
-
-            if errors:
-                response_data["errors"] = errors[:20]  # محدود کردن خطاها به 20 مورد اول
-                response_data["total_errors"] = len(errors)
-
-            return Response(response_data, status=status.HTTP_200_OK)
-
-        except Exception as e:
-            logger.error(f"Error processing callers file: {str(e)}")
-            # حذف فایل در صورت خطا
             if os.path.exists(file_path):
                 os.remove(file_path)
             return Response({"error": f"خطا در پردازش فایل: {str(e)}"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)

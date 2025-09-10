@@ -26,7 +26,9 @@ class Project(models.Model):
         verbose_name = "پروژه"
         verbose_name_plural = "پروژه‌ها"
         ordering = ['-created_at']
-
+        permissions = [
+            ('manage_project', 'Can manage project'),
+        ]
     def __str__(self):
         return self.name
 
@@ -143,7 +145,10 @@ class ProjectCaller(models.Model):
                                verbose_name="تماس‌گیرنده")
     assigned_at = models.DateTimeField(auto_now_add=True, verbose_name="تاریخ تخصیص")
     is_active = models.BooleanField(default=True, verbose_name="فعال")
-
+    def clean(self):
+        if not self.caller.profile.role == 'caller':
+            raise ValidationError("کاربر باید تماس‌گیرنده باشد.")
+        super().clean()
     class Meta:
         verbose_name = "تخصیص تماس‌گیرنده"
         verbose_name_plural = "تخصیص تماس‌گیرندگان"
@@ -190,7 +195,6 @@ class Contact(models.Model):
         verbose_name_plural = "مخاطبین"
         unique_together = ['project', 'phone']
         ordering = ['full_name']
-
     def __str__(self):
         return f"{self.full_name} - {self.phone}"
 
@@ -282,11 +286,18 @@ class Call(models.Model):
     original_data = models.TextField(blank=True, verbose_name="داده‌های اصلی")
     created_at = models.DateTimeField(auto_now_add=True, verbose_name="تاریخ ایجاد")
 
+    def can_edit(self, user):
+        if not self.is_editable:
+            return False
+        if user.is_superuser:
+            return True
+        if user.profile.role == 'caller' and self.caller == user:
+            return True
+        return False
     class Meta:
         verbose_name = "تماس"
         verbose_name_plural = "تماس‌ها"
         ordering = ['-call_date']
-
     def __str__(self):
         return f"{self.contact.full_name} - {self.caller.get_full_name()} - {self.get_call_result_display()}"
 
@@ -560,3 +571,50 @@ class CachedStatistics(models.Model):
         cached.save()
 
         return cached
+
+class UserProfile(models.Model):
+    USER_ROLES = [
+        ('caller', 'تماس‌گیرنده'),
+        ('regular', 'کاربر معمولی'),
+        ('admin','ادمین')
+
+    ]
+
+    user = models.OneToOneField(User, on_delete=models.CASCADE, related_name='profile')
+    role = models.CharField(max_length=20, choices=USER_ROLES, default='regular', verbose_name="نقش کاربر")
+
+    class Meta:
+        verbose_name = "پروفایل کاربر"
+        verbose_name_plural = "پروفایل‌های کاربران"
+
+    def __str__(self):
+        return f"{self.user.username} - {self.get_role_display()}"
+
+    def save(self, *args, **kwargs):
+        super().save(*args, **kwargs)
+        # تخصیص گروه بر اساس نقش
+        from django.contrib.auth.models import Group
+        group_name = 'Caller' if self.role == 'caller' else 'Regular User'
+        group = Group.objects.get(name=group_name)
+        self.user.groups.clear()
+        self.user.groups.add(group)
+# call_center/models.py
+class ContactLog(models.Model):
+    contact = models.ForeignKey('Contact', on_delete=models.CASCADE, related_name='logs', verbose_name="مخاطب")
+    action = models.CharField(max_length=200, verbose_name="اقدام")
+    performed_by = models.ForeignKey(
+        User,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        verbose_name="انجام شده توسط"
+    )
+    timestamp = models.DateTimeField(auto_now_add=True, verbose_name="زمان")
+
+    class Meta:
+        verbose_name = "لاگ مخاطب"
+        verbose_name_plural = "لاگ‌های مخاطب"
+        ordering = ['-timestamp']
+
+    def __str__(self):
+        return f"{self.action} - {self.contact.full_name} at {self.timestamp}"

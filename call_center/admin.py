@@ -1,18 +1,20 @@
 from django.contrib import admin
 from .models import (
     Project, ProjectCaller, Contact, Call, CallEditHistory,
-    CallStatistics, SavedSearch, UploadedFile, ExportReport, CachedStatistics
+    CallStatistics, SavedSearch, UploadedFile, ExportReport, CachedStatistics, UserProfile
 )
 
 
 @admin.register(Project)
 class ProjectAdmin(admin.ModelAdmin):
-    list_display = ['name', 'status', 'created_by', 'created_at', 'updated_at']
+    list_display = ['id','name', 'status', 'created_by', 'created_at', 'updated_at']
     list_filter = ['status', 'created_at', 'created_by']
     search_fields = ['name', 'description']
     ordering = ['-created_at']
     readonly_fields = ['created_at', 'updated_at']
-
+@admin.register(UserProfile)
+class UserProfileAdmin(admin.ModelAdmin):
+    list_display = ['user','role']
 
 @admin.register(ProjectCaller)
 class ProjectCallerAdmin(admin.ModelAdmin):
@@ -24,7 +26,7 @@ class ProjectCallerAdmin(admin.ModelAdmin):
 
 @admin.register(Contact)
 class ContactAdmin(admin.ModelAdmin):
-    list_display = ['full_name', 'phone', 'project', 'assigned_caller', 'is_active', 'created_at']
+    list_display = ["id",'full_name', 'phone', 'project', 'assigned_caller', 'is_active', 'created_at']
     list_filter = ['project', 'assigned_caller', 'is_active', 'created_at']
     search_fields = ['full_name', 'phone', 'email']
     ordering = ['full_name']

@@ -4,16 +4,21 @@ from rest_framework.fields import SerializerMethodField
 
 from .models import (
     Project, ProjectCaller, Contact, Call, CallEditHistory,
-    CallStatistics, SavedSearch, UploadedFile, ExportReport, CachedStatistics
+    CallStatistics, SavedSearch, UploadedFile, ExportReport, CachedStatistics,UserProfile
 )
-
+class UserProfileSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = UserProfile
+        fields = '__all__'
 
 class UserSerializer(serializers.ModelSerializer):
+    profile = UserProfileSerializer(read_only=True)
     class Meta:
         model = User
         fields = (
             'id', 'username', 'email', 'first_name', 'last_name',
-            'is_staff', 'is_active', 'date_joined', 'last_login'
+            'is_staff', 'is_active', 'date_joined', 'last_login',
+            'profile'
         )
         read_only_fields = (
             'username', 'email', 'is_staff', 'is_active',
@@ -71,24 +76,43 @@ class ProjectCallerSerializer(serializers.ModelSerializer):
 
 class ContactSerializer(serializers.ModelSerializer):
     #assigned_caller = UserSerializer(read_only=True)
-    #assigned_caller_id = serializers.PrimaryKeyRelatedField(
-    #    queryset=User.objects.all(), source='assigned_caller', write_only=True, allow_null=True, required=False
-    #)
+    assigned_caller_id = serializers.PrimaryKeyRelatedField(
+        queryset=User.objects.all(), source='assigned_caller', write_only=True, allow_null=True, required=False
+    )
     #project = ProjectSerializer(read_only=True)
-    #project_id = serializers.PrimaryKeyRelatedField(
-    #    queryset=Project.objects.all(), source='project', write_only=True
-    #)
+    project_id = serializers.PrimaryKeyRelatedField(
+        queryset=Project.objects.all(), source='project', write_only=True
+    )
     custom_fields = serializers.JSONField(binary=False, required=False)
 
     class Meta:
         model = Contact
         fields = (
-            'id', 'project', 'project_id', 'full_name', 'phone', 'email',
-            'address', 'assigned_caller', 'assigned_caller_id',
+            'id', 'project_id', 'full_name', 'phone', 'email',
+            'address', 'assigned_caller_id',
             'custom_fields', 'is_active', 'created_at', 'updated_at'
         )
         read_only_fields = ('created_at', 'updated_at')
 
+    def validate(self, data):
+        """
+        Ensure project_id is provided and valid.
+        """
+        if 'project' not in data or data['project'] is None:
+            raise serializers.ValidationError({"project_id": "This field is required."})
+        return data
+
+# call_center/serializers.py
+from rest_framework import serializers
+from .models import Call, Contact, Project, User
+from .serializers import ContactSerializer, ProjectSerializer, UserSerializer
+from django.utils import timezone
+
+# call_center/serializers.py
+from rest_framework import serializers
+from .models import Call, Contact, Project, User
+from .serializers import ContactSerializer, ProjectSerializer, UserSerializer
+from django.utils import timezone
 
 class CallSerializer(serializers.ModelSerializer):
     contact = ContactSerializer(read_only=True)
@@ -116,10 +140,48 @@ class CallSerializer(serializers.ModelSerializer):
             'project_id', 'call_date', 'call_result', 'notes', 'duration',
             'follow_up_required', 'follow_up_date', 'is_editable',
             'edited_at', 'edited_by', 'edited_by_id', 'edit_reason',
-            'original_data', 'created_at','status'
+            'original_data', 'created_at', 'status', 'feedback', 'detailed_report'
         )
         read_only_fields = ('call_date', 'created_at', 'edited_at')
 
+    def validate(self, data):
+        # نگاشت result به call_result
+        if 'result' in data:
+            data['call_result'] = data.pop('result')
+
+        # تنظیم پیش‌فرض برای follow_up_required
+        if 'follow_up_required' not in data:
+            data['follow_up_required'] = data.get('call_result') == 'callback_requested'
+
+        # نگاشت follow_up_notes به edit_reason
+        if 'follow_up_notes' in data:
+            data['edit_reason'] = data.pop('follow_up_notes') or ''
+
+        # بررسی وجود contact_id و project_id
+        if not data.get('contact') or not data.get('project'):
+            raise serializers.ValidationError({"contact_id": "مخاطب و پروژه باید مشخص شوند."})
+
+        # اعتبارسنجی call_status
+        valid_statuses = [choice[0] for choice in Call.CALL_STATUS_CHOICES]
+        if data.get('status') and data.get('status') not in valid_statuses:
+            raise serializers.ValidationError({"status": f"مقدار نامعتبر. باید یکی از {valid_statuses} باشد."})
+
+        # اعتبارسنجی call_result
+        valid_results = [choice[0] for choice in Call.CALL_RESULT_CHOICES]
+        if data.get('call_result') and data.get('call_result') not in valid_results:
+            raise serializers.ValidationError({"call_result": f"مقدار نامعتبر. باید یکی از {valid_results} باشد."})
+
+        # تبدیل follow_up_date به فرمت ISO 8601 اگر DateTimeField باشد
+        if data.get('follow_up_date') and isinstance(data['follow_up_date'], str):
+            try:
+                # اگر تاریخ ساده (YYYY-MM-DD) ارسال شده، به DateTime تبدیل شود
+                from datetime import datetime
+                date_obj = datetime.strptime(data['follow_up_date'], '%Y-%m-%d')
+                data['follow_up_date'] = date_obj.isoformat()  # به فرمت ISO 8601
+            except ValueError:
+                raise serializers.ValidationError({"follow_up_date": "فرمت تاریخ نامعتبر است. از YYYY-MM-DD استفاده کنید."})
+
+        return data
 
 class CallEditHistorySerializer(serializers.ModelSerializer):
     call = CallSerializer(read_only=True)

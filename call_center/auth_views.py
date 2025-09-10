@@ -101,6 +101,7 @@ def user_profile(request):
     """
     دریافت اطلاعات پروفایل کاربر
     """
+    print("hello ")
     serializer = UserSerializer(request.user)
     return Response(serializer.data)
 
