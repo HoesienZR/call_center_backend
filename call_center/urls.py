@@ -25,6 +25,8 @@ urlpatterns = [
     path('auth/profile/', auth_views.user_profile, name='api_user_profile'),
     path('auth/register/', auth_views.register, name='api_register'),
     path('auth/token/', auth_views.CustomAuthToken.as_view(), name='api_token_auth'),
+    path('',views.check_postgresql_connection, name='check_postgresql_connection'),
 ]
+
 
 

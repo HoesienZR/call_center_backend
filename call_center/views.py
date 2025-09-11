@@ -17,6 +17,9 @@ import os
 import uuid
 import json
 import logging
+from django.shortcuts import render
+from django.db import connections
+from django.http import HttpResponse
 
 from .models import (
     Project, ProjectCaller, Contact, Call, CallEditHistory,
@@ -36,6 +39,13 @@ from .utils import (
 logger = logging.getLogger(__name__)
 
 
+def check_postgresql_connection(request):
+    try:
+        connection = connections['default']
+        connection.ensure_connection()
+        return HttpResponse("PostgreSQL connection successful")
+    except Exception as e:
+        return HttpResponse(f"PostgreSQL connection failed: {e}")
 class UserViewSet(viewsets.ReadOnlyModelViewSet):
     queryset = User.objects.all()
     serializer_class = UserSerializer
