@@ -10,6 +10,7 @@ click-plugins==1.1.1.2
 click-repl==0.3.0
 colorama==0.4.6
 cron_descriptor==2.0.6
+dj-database-url==3.0.1
 Django==5.2.5
 django-celery-beat==2.8.1
 django-cors-headers==4.7.0
@@ -23,8 +24,10 @@ openpyxl==3.1.5
 packaging==25.0
 pandas==2.3.1
 prompt_toolkit==3.0.52
+psycopg2-binary==2.9.10
 python-crontab==3.3.0
 python-dateutil==2.9.0.post0
+python-dotenv==1.1.1
 pytz==2025.2
 redis==6.4.0
 requests==2.32.5
