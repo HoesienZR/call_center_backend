@@ -11,7 +11,7 @@ from django.conf import settings
 from django.core.files.storage import FileSystemStorage
 from django.utils import timezone
 from datetime import datetime
-from .permission import IsRegularUser,IsAdminOrCaller
+from .permission import IsRegularUser,IsAdminOrCaller,IsProjectCaller
 import pandas as pd
 import os
 import uuid
@@ -39,7 +39,21 @@ logger = logging.getLogger(__name__)
 class UserViewSet(viewsets.ReadOnlyModelViewSet):
     queryset = User.objects.all()
     serializer_class = UserSerializer
-    permission_classes = [IsAdminUser]
+    permission_classes = [IsAuthenticated]
+    @action(detail=False, methods=['get'],permission_classes=[IsAuthenticated,IsAdminOrCaller],
+            url_path='callers',url_name='callers')
+    def callers(self,request,pk=None):
+        callers =  self.get_queryset().filter(profile__role='caller')
+        serializer =  self.get_serializer(callers,many=True )
+        return Response(serializer.data,status=status.HTTP_200_OK)
+
+    #@action(detail=False, methods=['get'], permission_classes=[IsAuthenticated, IsAdminOrCaller],
+    #        url_path='my_callers', url_name='my-callers')
+    #def my_callers(self, request, pk=None):
+    #    user =  User.objects.get(id=request.user.id)
+    #    user_callers = Contact.objects.filter(user=self.request.user).
+    #    serializer = self.get_serializer(user_callers, many=True)
+    #    return Response(serializer.data, status=status.HTTP_200_OK)
 class ProjectViewSet(viewsets.ModelViewSet):
     queryset = Project.objects.all()
     serializer_class = ProjectSerializer
@@ -53,18 +67,17 @@ class ProjectViewSet(viewsets.ModelViewSet):
         ).distinct()
     def perform_create(self, serializer):
         serializer.save(created_by=self.request.user)
-    @action(detail=True, methods=['get'],permission_classes = [IsAuthenticated],url_path='project_report',
+    @action(detail=True, methods=['get'],permission_classes = [IsAuthenticated,IsAdminUser | IsProjectCaller],url_path='project_report',
             url_name = 'project-report')
     def project_report(self, request, pk=None):
         project = self.get_object()
         # Get start_date and end_date from query parameters
         start_date = request.query_params.get('start_date')
         end_date = request.query_params.get('end_date')
-        print(start_date, end_date)
 
         # Base queryset for calls
         calls_queryset = project.calls.all()
-        print(calls_queryset)
+
         # Apply date filters if provided
         if start_date:
             try:
@@ -226,9 +239,20 @@ class ContactViewSet(viewsets.ModelViewSet):
                                                                        flat=True)
         return queryset.filter(project__in=user_projects).filter(
             models.Q(assigned_caller=self.request.user) | models.Q(assigned_caller__isnull=True))
-
+    
     def create(self, request, *args, **kwargs):
+        project_and_user_info:dict = {
+            "project": request.data.get("project_id"),
+            "assigned_caller" : request.data.get("assigned_caller_id") or self.request.user,
+            "authenticated_user":  self.request.user
+
+        }
+        ProjectCaller.objects.get_or_create(caller=User.objects.get(id=project_and_user_info['assigned_caller']),
+                                            project=Project.objects.get(id=project_and_user_info['project'])
+                                                                         )
+
         logger.info(f"Incoming request data: {request.data}")
+        print(request.data)
         serializer = self.get_serializer(data=request.data)
         if not serializer.is_valid():
             logger.error(f"Serializer errors: {serializer.errors}")
@@ -275,7 +299,7 @@ class ContactViewSet(viewsets.ModelViewSet):
             return Response(serializer.data)
         return Response({"detail": "No calls found for this contact."}, status=status.HTTP_404_NOT_FOUND)
 
-    @action(detail=False, methods=["post"], permission_classes=[IsAuthenticated])
+    @action(detail=False, methods=["post"], permission_classes=[IsAuthenticated,IsAdminOrCaller,])
     def request_new_call(self, request):
         """
         درخواست یک مخاطب جدید برای تماس توسط تماس‌گیرنده.

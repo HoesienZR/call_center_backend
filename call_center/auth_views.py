@@ -8,6 +8,8 @@ from django.contrib.auth import authenticate
 from django.contrib.auth.models import User
 from .serializers import UserSerializer
 
+from .models import UserProfile
+
 
 class CustomAuthToken(ObtainAuthToken):
     """
@@ -101,11 +103,10 @@ def user_profile(request):
     """
     دریافت اطلاعات پروفایل کاربر
     """
-    print("hello ")
     serializer = UserSerializer(request.user)
     return Response(serializer.data)
 
-
+#need to fixed
 @api_view(['POST'])
 @permission_classes([AllowAny])
 def register(request):
@@ -137,13 +138,13 @@ def register(request):
     )
 
     token, created = Token.objects.get_or_create(user=user)
-
+    UserProfile.objects.create(user=user)
     return Response({
         'message': 'کاربر با موفقیت ایجاد شد',
         'token': token.key,
         'user_id': user.pk,
         'username': user.username,
         'email': user.email,
-    }, status=status.HTTP_201_CREATED)
+    },status=status.HTTP_201_CREATED)
 
 

@@ -84,12 +84,12 @@ class ContactSerializer(serializers.ModelSerializer):
         queryset=Project.objects.all(), source='project', write_only=True
     )
     custom_fields = serializers.JSONField(binary=False, required=False)
-
+    user_id = serializers.SerializerMethodField()
     class Meta:
         model = Contact
         fields = (
             'id', 'project_id', 'full_name', 'phone', 'email',
-            'address', 'assigned_caller_id',
+            'address', 'assigned_caller_id',"user_id"
             'custom_fields', 'is_active', 'created_at', 'updated_at'
         )
         read_only_fields = ('created_at', 'updated_at')
@@ -101,6 +101,9 @@ class ContactSerializer(serializers.ModelSerializer):
         if 'project' not in data or data['project'] is None:
             raise serializers.ValidationError({"project_id": "This field is required."})
         return data
+
+    def get_user_id(self, obj):
+        return User.objects.get(phone=obj.phone)
 
 # call_center/serializers.py
 from rest_framework import serializers

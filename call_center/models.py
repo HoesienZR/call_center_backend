@@ -168,7 +168,7 @@ class Contact(models.Model):
         ('completed', 'تکمیل شده'),
         ('not_interested', 'علاقه‌مند نیست'),
     ]
-
+    user = models.OneToOneField(User,on_delete=models.CASCADE,related_name="user_contact",verbose_name="کاربر مخاطب",blank=True,null=True)
     project = models.ForeignKey(Project, on_delete=models.CASCADE, related_name='contacts', verbose_name="پروژه")
     full_name = models.CharField(max_length=100, verbose_name="نام کامل")
     phone = models.CharField(max_length=20, verbose_name="شماره تماس")

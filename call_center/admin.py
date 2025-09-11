@@ -1,9 +1,9 @@
 from django.contrib import admin
+from django.contrib.auth.models import User
 from .models import (
     Project, ProjectCaller, Contact, Call, CallEditHistory,
     CallStatistics, SavedSearch, UploadedFile, ExportReport, CachedStatistics, UserProfile
 )
-
 
 @admin.register(Project)
 class ProjectAdmin(admin.ModelAdmin):

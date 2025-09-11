@@ -2,6 +2,21 @@ from rest_framework.permissions import BasePermission
 from .models import UserProfile, ProjectCaller, Project
 
 
+class IsProjectCaller(BasePermission):
+    def has_object_permission(self, request, view, obj:Project):
+        try :
+            if  request.user in obj.project_callers.caller :
+                print(True)
+                return True
+        except AttributeError:
+
+            return False
+#TODO fix this permission
+#class IsProjectManager(BasePermission):
+#    def has_object_permission(self, request, view, obj:Project):
+#        try :
+#            request
+#            if request.user in obj.proproject :
 class IsAdminOrCaller(BasePermission):
     """
     اجازه می‌دهد ادمین یا تماس‌گیرندگان به پروژه‌ها و عملیات مرتبط دسترسی داشته باشند.
@@ -11,7 +26,6 @@ class IsAdminOrCaller(BasePermission):
         if request.user.is_superuser:
             return True
         # تماس‌گیرنده باید نقش 'caller' داشته باشد
-        print('True')
         return hasattr(request.user, 'profile') and request.user.profile.role == 'caller'
 
     def has_object_permission(self, request, view, obj):
