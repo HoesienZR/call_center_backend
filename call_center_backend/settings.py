@@ -32,7 +32,8 @@ CORS_ALLOWED_ORIGINS = [
     "http://localhost:5173",
     "http://127.0.0.1:5173",
     "http://192.168.20.28:5173",
-    'http://localhost:5173'
+    'http://localhost:5173',
+    'https://callcenter.liara.run'
 ]
 CORS_ALLOW_CREDENTIALS = True
 REST_FRAMEWORK = {
@@ -141,6 +142,7 @@ USE_I18N = True
 # https://docs.djangoproject.com/en/5.2/howto/static-files/
 
 STATIC_URL = 'static/'
+STATIC_ROOT = 'staticfiles/'
 
 # Default primary key field type
 # https://docs.djangoproject.com/en/5.2/ref/settings/#default-auto-field
