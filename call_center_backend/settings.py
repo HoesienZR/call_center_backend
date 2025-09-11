@@ -113,7 +113,12 @@ WSGI_APPLICATION = 'call_center_backend.wsgi.application'
 # }
 
 DATABASES = {
-    "default" : dj_database_url.config(os.environ.get("DATABASE_URL"))
+    "default": dj_database_url.config(
+        default=os.environ.get(
+            "DATABASE_URL",
+            "postgres://callcenter-user:12345678@localhost:5432/callcenterdb"
+        ),
+    )
 }
 
 
