@@ -62,7 +62,6 @@ INSTALLED_APPS = [
     'corsheaders',
     'call_center',
     'django_celery_beat',
-    'postgresql_app',
 
 ]
 USE_TZ = True
