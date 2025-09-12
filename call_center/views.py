@@ -34,6 +34,7 @@ from .utils import (
     validate_phone_number, normalize_phone_number, generate_secure_password,
     is_caller_user, assign_contacts_randomly, validate_excel_data, clean_string_field
 )
+from .excel_imports import import_contacts_from_excel, import_callers_from_excel
 
 # تنظیم logger
 logger = logging.getLogger(__name__)
@@ -57,6 +58,16 @@ class UserViewSet(viewsets.ReadOnlyModelViewSet):
         serializer =  self.get_serializer(callers,many=True )
         return Response(serializer.data,status=status.HTTP_200_OK)
 
+        # اضافه کردن متد آپلود اکسل
+    @action(detail=False, methods=["post"], url_path="upload-callers")
+    def upload_callers(self, request):
+        file_obj = request.FILES.get("file")
+        if not file_obj:
+            return Response({"error": "فایل ارسال نشده"}, status=status.HTTP_400_BAD_REQUEST)
+
+        created = import_callers_from_excel(file_obj)
+        return Response({"status": "ok", "created_callers": created})
+
     #@action(detail=False, methods=['get'], permission_classes=[IsAuthenticated, IsAdminOrCaller],
     #        url_path='my_callers', url_name='my-callers')
     #def my_callers(self, request, pk=None):
@@ -64,6 +75,8 @@ class UserViewSet(viewsets.ReadOnlyModelViewSet):
     #    user_callers = Contact.objects.filter(user=self.request.user).
     #    serializer = self.get_serializer(user_callers, many=True)
     #    return Response(serializer.data, status=status.HTTP_200_OK)
+
+
 class ProjectViewSet(viewsets.ModelViewSet):
     queryset = Project.objects.all()
     serializer_class = ProjectSerializer
@@ -350,6 +363,23 @@ class ContactViewSet(viewsets.ModelViewSet):
             return Response(serializer.data, status=status.HTTP_200_OK)
 
         return Response({"detail": "هیچ مخاطب جدیدی برای تماس یافت نشد."}, status=status.HTTP_404_NOT_FOUND)
+
+    @action(detail=False, methods=["post"], url_path="upload-contacts")
+    def upload_contacts(self, request):
+        file_obj = request.FILES.get("file")
+        project_id = request.data.get("project_id")
+        if not file_obj:
+            return Response({"error": "فایل ارسال نشده"}, status=status.HTTP_400_BAD_REQUEST)
+        if not project_id:
+            return Response({"error": "شناسه پروژه الزامی است"}, status=status.HTTP_400_BAD_REQUEST)
+
+        try:
+            project = Project.objects.get(id=project_id)
+        except Project.DoesNotExist:
+            return Response({"error": "پروژه یافت نشد"}, status=status.HTTP_404_NOT_FOUND)
+
+        created = import_contacts_from_excel(file_obj, project)
+        return Response({"status": "ok", "created_contacts": created})
 
     @action(detail=False, methods=["post"], permission_classes=[IsAuthenticated, IsAdminOrCaller],
             url_path="remove_assigned_caller/(?P<contact_id>\d+)", url_name="remove-assigned_caller")
