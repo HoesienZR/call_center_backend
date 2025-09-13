@@ -1,9 +1,22 @@
-from django.db import models
 from django.db.models import functions
 from django.contrib.auth.models import User
+from django.db import models
+from django.contrib.auth.models import AbstractUser
+from django.conf import settings
 from django.core.exceptions import ValidationError
 import json
 from datetime import datetime, timedelta
+
+
+# 1. مدل کاربر سفارشی با فیلد شماره موبایل و اجازه ساخت پروژه
+class CustomUser(AbstractUser):
+    """
+    مدل کاربر سفارشی که شماره موبایل و اجازه ساخت پروژه را نیز شامل می‌شود.
+    """
+    phone_number = models.CharField(max_length=20, unique=True, verbose_name="شماره موبایل")
+    can_create_projects = models.BooleanField(default=False, verbose_name="می‌تواند پروژه بسازد")
+    def __str__(self):
+        return self.username
 
 
 class Project(models.Model):
@@ -17,20 +30,13 @@ class Project(models.Model):
     name = models.CharField(max_length=100, verbose_name="نام پروژه")
     description = models.TextField(blank=True, verbose_name="توضیحات")
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='active', verbose_name="وضعیت")
-    created_by = models.ForeignKey(User, on_delete=models.CASCADE, related_name='created_projects',
+    # ForeignKey به مدل کاربر سفارشی تغییر یافت
+    created_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='created_projects',
                                    verbose_name="ایجاد شده توسط")
     created_at = models.DateTimeField(auto_now_add=True, verbose_name="تاریخ ایجاد")
     updated_at = models.DateTimeField(auto_now=True, verbose_name="تاریخ به‌روزرسانی")
-
-    class Meta:
-        verbose_name = "پروژه"
-        verbose_name_plural = "پروژه‌ها"
-        ordering = ['-created_at']
-        permissions = [
-            ('manage_project', 'Can manage project'),
-        ]
-    def __str__(self):
-        return self.name
+    # ارتباط با کاربران از طریق مدل واسط ProjectMembership
+    members = models.ManyToManyField(settings.AUTH_USER_MODEL, through='ProjectMembership', related_name='projects', verbose_name="اعضای پروژه")
 
     def get_statistics(self):
         """دریافت آمار کلی پروژه"""
@@ -137,11 +143,128 @@ class Project(models.Model):
 
         return list(chart_data.values())
 
+    class Meta:
+        verbose_name = "پروژه"
+        verbose_name_plural = "پروژه‌ها"
+        ordering = ['-created_at']
+        permissions = [
+            ('manage_project', 'Can manage project'),
+        ]
+
+    def __str__(self):
+        return self.name
+
+    # ... (متدهای دیگر مدل Project بدون تغییر باقی می‌مانند)
+
+
+# 2. مدل جدید برای مدیریت سطوح دسترسی کاربران در هر پروژه
+class ProjectMembership(models.Model):
+    """
+    مدل واسط برای تعیین نقش کاربران در هر پروژه.
+    """
+    ROLE_CHOICES = [
+        ('admin', 'ادمین'),
+        ('caller', 'تماس‌گیرنده'),
+        ('contact', 'مخاطب'),
+    ]
+
+    project = models.ForeignKey(Project, on_delete=models.CASCADE, verbose_name="پروژه")
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, verbose_name="کاربر")
+    role = models.CharField(max_length=20, choices=ROLE_CHOICES, verbose_name="نقش در پروژه")
+    assigned_at = models.DateTimeField(auto_now_add=True, verbose_name="تاریخ تخصیص")
+
+    class Meta:
+        verbose_name = "عضویت در پروژه"
+        verbose_name_plural = "عضویت‌ها در پروژه‌ها"
+        unique_together = ('project', 'user') # هر کاربر در هر پروژه فقط یک نقش می‌تواند داشته باشد
+        ordering = ['-assigned_at']
+
+    def __str__(self):
+        return f"{self.user.username} as {self.get_role_display()} in {self.project.name}"
+
+
+class Contact(models.Model):
+    CALL_STATUS_CHOICES = [
+        ("pending", "در انتظار تماس"),
+        ("contacted", "تماس گرفته شده"),
+        ("follow_up", "نیاز به پیگیری"),
+        ("completed", "تکمیل شده"),
+        ("not_interested", "علاقه‌مند نیست"),
+    ]
+    user = models.OneToOneField(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="user_contact", verbose_name="کاربر مخاطب", blank=True, null=True)
+    project = models.ForeignKey("Project", on_delete=models.CASCADE, related_name="contacts", verbose_name="پروژه")
+    full_name = models.CharField(max_length=100, verbose_name="نام کامل")
+    phone = models.CharField(max_length=20, verbose_name="شماره تماس")
+    email = models.EmailField(blank=True, verbose_name="ایمیل")
+    address = models.TextField(blank=True, verbose_name="آدرس")
+    assigned_caller = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="assigned_contacts",
+        verbose_name="تماس‌گیرنده تخصیص داده شده"
+    )
+    call_status = models.CharField(max_length=20, choices=CALL_STATUS_CHOICES, default="pending",
+                                   verbose_name="وضعیت تماس")
+    last_call_date = models.DateTimeField(null=True, blank=True, verbose_name="آخرین تماس")
+    custom_fields = models.TextField(blank=True, verbose_name="فیلدهای سفارشی")
+    is_active = models.BooleanField(default=True, verbose_name="فعال")
+    created_at = models.DateTimeField(auto_now_add=True, verbose_name="تاریخ ایجاد")
+    updated_at = models.DateTimeField(auto_now=True, verbose_name="تاریخ به‌روزرسانی")
+    created_by = models.ForeignKey(settings.AUTH_USER_MODEL,related_name="created_contacts", null=True,blank=True,on_delete=models.CASCADE,verbose_name="ایجاد شده توسط")
+
+    class Meta:
+        verbose_name = "مخاطب"
+        verbose_name_plural = "مخاطبین"
+        unique_together = ["project", "phone"]
+        ordering = ["full_name"]
+    def __str__(self):
+        return f"{self.full_name} - {self.phone}"
+
+    def get_custom_fields(self):
+        if self.custom_fields:
+            try:
+                return json.loads(self.custom_fields)
+            except json.JSONDecodeError:
+                return {}
+        return {}
+
+    def set_custom_fields(self, fields_dict):
+        if fields_dict:
+            self.custom_fields = json.dumps(fields_dict, ensure_ascii=False)
+        else:
+            self.custom_fields = ""
+
+    def get_call_statistics(self):
+        try:
+            stats = self.call_statistics.get(project=self.project)
+            return {
+                "total_calls": stats.total_calls,
+                "successful_calls": stats.successful_calls,
+                "response_rate": float(stats.response_rate),
+                "last_call_date": stats.last_call_date,
+                "last_call_result": stats.last_call_result
+            }
+        except CallStatistics.DoesNotExist:
+            return {
+                "total_calls": 0,
+                "successful_calls": 0,
+                "response_rate": 0.0,
+                "last_call_date": None,
+                "last_call_result": None
+            }
+
+    def get_last_call(self):
+        last_call = self.calls.order_by("-call_date").first()
+        return last_call
+
+
 
 class ProjectCaller(models.Model):
     """مدل برای تخصیص تماس‌گیرندگان به پروژه‌ها"""
     project = models.ForeignKey(Project, on_delete=models.CASCADE, related_name='project_callers', verbose_name="پروژه")
-    caller = models.ForeignKey(User, on_delete=models.CASCADE, related_name='project_assignments',
+    caller = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='project_assignments',
                                verbose_name="تماس‌گیرنده")
     assigned_at = models.DateTimeField(auto_now_add=True, verbose_name="تاریخ تخصیص")
     is_active = models.BooleanField(default=True, verbose_name="فعال")
@@ -157,88 +280,6 @@ class ProjectCaller(models.Model):
 
     def __str__(self):
         return f"{self.caller.get_full_name()} - {self.project.name}"
-
-
-class Contact(models.Model):
-    """مدل برای ذخیره اطلاعات مخاطبین"""
-    CALL_STATUS_CHOICES = [
-        ('pending', 'در انتظار تماس'),
-        ('contacted', 'تماس گرفته شده'),
-        ('follow_up', 'نیاز به پیگیری'),
-        ('completed', 'تکمیل شده'),
-        ('not_interested', 'علاقه‌مند نیست'),
-    ]
-    user = models.OneToOneField(User,on_delete=models.CASCADE,related_name="user_contact",verbose_name="کاربر مخاطب",blank=True,null=True)
-    project = models.ForeignKey(Project, on_delete=models.CASCADE, related_name='contacts', verbose_name="پروژه")
-    full_name = models.CharField(max_length=100, verbose_name="نام کامل")
-    phone = models.CharField(max_length=20, verbose_name="شماره تماس")
-    email = models.EmailField(blank=True, verbose_name="ایمیل")
-    address = models.TextField(blank=True, verbose_name="آدرس")
-    assigned_caller = models.ForeignKey(
-        User,
-        on_delete=models.SET_NULL,
-        null=True,
-        blank=True,
-        related_name='assigned_contacts',
-        verbose_name="تماس‌گیرنده تخصیص داده شده"
-    )
-    call_status = models.CharField(max_length=20, choices=CALL_STATUS_CHOICES, default='pending',
-                                   verbose_name="وضعیت تماس")
-    last_call_date = models.DateTimeField(null=True, blank=True, verbose_name="آخرین تماس")
-    custom_fields = models.TextField(blank=True, verbose_name="فیلدهای سفارشی")
-    is_active = models.BooleanField(default=True, verbose_name="فعال")
-    created_at = models.DateTimeField(auto_now_add=True, verbose_name="تاریخ ایجاد")
-    updated_at = models.DateTimeField(auto_now=True, verbose_name="تاریخ به‌روزرسانی")
-
-    class Meta:
-        verbose_name = "مخاطب"
-        verbose_name_plural = "مخاطبین"
-        unique_together = ['project', 'phone']
-        ordering = ['full_name']
-    def __str__(self):
-        return f"{self.full_name} - {self.phone}"
-
-    def get_custom_fields(self):
-        """دریافت فیلدهای سفارشی به صورت dict"""
-        if self.custom_fields:
-            try:
-                return json.loads(self.custom_fields)
-            except json.JSONDecodeError:
-                return {}
-        return {}
-
-    def set_custom_fields(self, fields_dict):
-        """تنظیم فیلدهای سفارشی"""
-        if fields_dict:
-            self.custom_fields = json.dumps(fields_dict, ensure_ascii=False)
-        else:
-            self.custom_fields = ""
-
-    def get_call_statistics(self):
-        """دریافت آمار تماس‌های این مخاطب"""
-        try:
-            stats = self.call_statistics.get(project=self.project)
-            return {
-                'total_calls': stats.total_calls,
-                'successful_calls': stats.successful_calls,
-                'response_rate': float(stats.response_rate),
-                'last_call_date': stats.last_call_date,
-                'last_call_result': stats.last_call_result
-            }
-        except CallStatistics.DoesNotExist:
-            return {
-                'total_calls': 0,
-                'successful_calls': 0,
-                'response_rate': 0.0,
-                'last_call_date': None,
-                'last_call_result': None
-            }
-
-    def get_last_call(self):
-        """دریافت آخرین تماس"""
-        last_call = self.calls.order_by('-call_date').first()
-        return last_call
-
 
 class Call(models.Model):
     """مدل برای ثبت تماس‌ها"""
@@ -259,9 +300,9 @@ class Call(models.Model):
         ('follow_up', 'نیاز به پیگیری'),
         ('cancelled', 'لغو شده'),
     ]
-
     contact = models.ForeignKey(Contact, on_delete=models.CASCADE, related_name='calls', verbose_name="مخاطب")
-    caller = models.ForeignKey(User, on_delete=models.CASCADE, related_name='calls', verbose_name="تماس‌گیرنده")
+    caller = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='calls',
+                               verbose_name="تماس‌گیرنده")
     project = models.ForeignKey(Project, on_delete=models.CASCADE, related_name='calls', verbose_name="پروژه")
     call_date = models.DateTimeField(auto_now_add=True, verbose_name="تاریخ تماس")
     call_result = models.CharField(max_length=50, choices=CALL_RESULT_CHOICES, verbose_name="نتیجه تماس")
@@ -275,7 +316,7 @@ class Call(models.Model):
     is_editable = models.BooleanField(default=True, verbose_name="قابل ویرایش")
     edited_at = models.DateTimeField(null=True, blank=True, verbose_name="تاریخ ویرایش")
     edited_by = models.ForeignKey(
-        User,
+        settings.AUTH_USER_MODEL,
         on_delete=models.SET_NULL,
         null=True,
         blank=True,
@@ -291,8 +332,13 @@ class Call(models.Model):
             return False
         if user.is_superuser:
             return True
-        if user.profile.role == 'caller' and self.caller == user:
-            return True
+        # بررسی اینکه آیا کاربر ادمین پروژه است یا همان تماس‌گیرنده است
+        try:
+            membership = ProjectMembership.objects.get(project=self.project, user=user)
+            if membership.role == 'admin' or self.caller == user:
+                return True
+        except ProjectMembership.DoesNotExist:
+            return False
         return False
     class Meta:
         verbose_name = "تماس"
@@ -329,12 +375,6 @@ class Call(models.Model):
             }
             self.set_original_data(original)
 
-    def can_edit(self, user):
-        """بررسی امکان ویرایش توسط کاربر"""
-        if not self.is_editable:
-            return False
-        return self.caller == user
-
     def save(self, *args, **kwargs):
         super().save(*args, **kwargs)
         # به‌روزرسانی آمار پس از ذخیره
@@ -348,18 +388,16 @@ class Call(models.Model):
         )
         stats.update_statistics()
 
-
 class CallEditHistory(models.Model):
     """مدل برای تاریخچه ویرایش تماس‌ها"""
     call = models.ForeignKey(Call, on_delete=models.CASCADE, related_name='edit_history', verbose_name="تماس")
-    edited_by = models.ForeignKey(User, on_delete=models.CASCADE, related_name='call_edits',
+    edited_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='call_edits',
                                   verbose_name="ویرایش شده توسط")
     edit_date = models.DateTimeField(auto_now_add=True, verbose_name="تاریخ ویرایش")
     field_name = models.CharField(max_length=50, verbose_name="نام فیلد")
     old_value = models.TextField(blank=True, verbose_name="مقدار قبلی")
     new_value = models.TextField(blank=True, verbose_name="مقدار جدید")
     edit_reason = models.TextField(blank=True, verbose_name="دلیل ویرایش")
-
     class Meta:
         verbose_name = "تاریخچه ویرایش تماس"
         verbose_name_plural = "تاریخچه ویرایش تماس‌ها"
@@ -367,7 +405,6 @@ class CallEditHistory(models.Model):
 
     def __str__(self):
         return f"{self.call.id} - {self.field_name} - {self.edited_by.get_full_name()}"
-
 
 class CallStatistics(models.Model):
     """مدل برای آمار تماس‌ها"""
@@ -404,15 +441,16 @@ class CallStatistics(models.Model):
         self.response_rate = (self.successful_calls / self.total_calls * 100) if self.total_calls > 0 else 0
         self.save()
 
-
 class SavedSearch(models.Model):
     """مدل برای ذخیره جستجوهای کاربران"""
-    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='saved_searches', verbose_name="کاربر")
     search_name = models.CharField(max_length=100, verbose_name="نام جستجو")
     search_criteria = models.TextField(verbose_name="معیارهای جستجو")
     is_public = models.BooleanField(default=False, verbose_name="عمومی")
     created_at = models.DateTimeField(auto_now_add=True, verbose_name="تاریخ ایجاد")
-
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='saved_searches',
+                             verbose_name="کاربر")
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='saved_searches',
+                             verbose_name="کاربر")
     class Meta:
         verbose_name = "جستجوی ذخیره شده"
         verbose_name_plural = "جستجوهای ذخیره شده"
@@ -437,7 +475,6 @@ class SavedSearch(models.Model):
         else:
             self.search_criteria = '{}'
 
-
 class UploadedFile(models.Model):
     """مدل برای مدیریت فایل‌های آپلود شده"""
     FILE_TYPE_CHOICES = [
@@ -445,15 +482,14 @@ class UploadedFile(models.Model):
         ('callers', 'تماس‌گیرندگان'),
     ]
 
-    project = models.ForeignKey(Project, on_delete=models.CASCADE, related_name='uploaded_files', verbose_name="پروژه")
     file_name = models.CharField(max_length=255, verbose_name="نام فایل")
     file_path = models.CharField(max_length=500, verbose_name="مسیر فایل")
     file_type = models.CharField(max_length=20, choices=FILE_TYPE_CHOICES, verbose_name="نوع فایل")
-    uploaded_by = models.ForeignKey(User, on_delete=models.CASCADE, related_name='uploaded_files',
-                                    verbose_name="آپلود شده توسط")
     records_count = models.PositiveIntegerField(default=0, verbose_name="تعداد رکوردها")
     upload_date = models.DateTimeField(auto_now_add=True, verbose_name="تاریخ آپلود")
-
+    project = models.ForeignKey(Project, on_delete=models.CASCADE, related_name='uploaded_files', verbose_name="پروژه")
+    uploaded_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='uploaded_files',
+                                    verbose_name="آپلود شده توسط")
     class Meta:
         verbose_name = "فایل آپلود شده"
         verbose_name_plural = "فایل‌های آپلود شده"
@@ -461,7 +497,6 @@ class UploadedFile(models.Model):
 
     def __str__(self):
         return f"{self.file_name} - {self.project.name}"
-
 
 class ExportReport(models.Model):
     """مدل برای گزارش‌های صادر شده"""
@@ -471,17 +506,17 @@ class ExportReport(models.Model):
         ('pdf', 'PDF'),
     ]
 
-    project = models.ForeignKey(Project, on_delete=models.CASCADE, null=True, blank=True, related_name='export_reports',
-                                verbose_name="پروژه")
-    exported_by = models.ForeignKey(User, on_delete=models.CASCADE, related_name='export_reports',
-                                    verbose_name="صادر شده توسط")
+
     export_type = models.CharField(max_length=50, choices=EXPORT_TYPE_CHOICES, verbose_name="نوع صادرات")
     file_name = models.CharField(max_length=255, verbose_name="نام فایل")
     file_path = models.CharField(max_length=500, verbose_name="مسیر فایل")
     filters = models.TextField(blank=True, verbose_name="فیلترها")
     records_count = models.PositiveIntegerField(default=0, verbose_name="تعداد رکوردها")
     export_date = models.DateTimeField(auto_now_add=True, verbose_name="تاریخ صادرات")
-
+    project = models.ForeignKey(Project, on_delete=models.CASCADE, null=True, blank=True, related_name='export_reports',
+                                verbose_name="پروژه")
+    exported_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='export_reports',
+                                    verbose_name="صادر شده توسط")
     class Meta:
         verbose_name = "گزارش صادر شده"
         verbose_name_plural = "گزارش‌های صادر شده"
@@ -505,7 +540,6 @@ class ExportReport(models.Model):
             self.filters = json.dumps(filters_dict, ensure_ascii=False)
         else:
             self.filters = ""
-
 
 class CachedStatistics(models.Model):
     """مدل برای کش آمار"""
@@ -572,45 +606,18 @@ class CachedStatistics(models.Model):
 
         return cached
 
-class UserProfile(models.Model):
-    USER_ROLES = [
-        ('caller', 'تماس‌گیرنده'),
-        ('regular', 'کاربر معمولی'),
-        ('admin','ادمین')
-
-    ]
-
-    user = models.OneToOneField(User, on_delete=models.CASCADE, related_name='profile')
-    role = models.CharField(max_length=20, choices=USER_ROLES, default='regular', verbose_name="نقش کاربر")
-
-    class Meta:
-        verbose_name = "پروفایل کاربر"
-        verbose_name_plural = "پروفایل‌های کاربران"
-
-    def __str__(self):
-        return f"{self.user.username} - {self.get_role_display()}"
-
-    def save(self, *args, **kwargs):
-        super().save(*args, **kwargs)
-        # تخصیص گروه بر اساس نقش
-        from django.contrib.auth.models import Group
-        group_name = 'Caller' if self.role == 'caller' else 'Regular User'
-        group = Group.objects.get(name=group_name)
-        self.user.groups.clear()
-        self.user.groups.add(group)
 # call_center/models.py
 class ContactLog(models.Model):
-    contact = models.ForeignKey('Contact', on_delete=models.CASCADE, related_name='logs', verbose_name="مخاطب")
     action = models.CharField(max_length=200, verbose_name="اقدام")
+    timestamp = models.DateTimeField(auto_now_add=True, verbose_name="زمان")
+    contact = models.ForeignKey('Contact', on_delete=models.CASCADE, related_name='logs', verbose_name="مخاطب")
     performed_by = models.ForeignKey(
-        User,
+        settings.AUTH_USER_MODEL,
         on_delete=models.SET_NULL,
         null=True,
         blank=True,
         verbose_name="انجام شده توسط"
     )
-    timestamp = models.DateTimeField(auto_now_add=True, verbose_name="زمان")
-
     class Meta:
         verbose_name = "لاگ مخاطب"
         verbose_name_plural = "لاگ‌های مخاطب"

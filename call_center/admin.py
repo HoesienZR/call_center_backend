@@ -1,105 +1,116 @@
+# call_center/admin.py
+
 from django.contrib import admin
-from django.contrib.auth.models import User
+from django.contrib.auth.admin import UserAdmin
 from .models import (
-    Project, ProjectCaller, Contact, Call, CallEditHistory,
-    CallStatistics, SavedSearch, UploadedFile, ExportReport, CachedStatistics, UserProfile
+    CustomUser,
+    Project,
+    ProjectMembership,
+    Contact,
+    Call,
+    CallEditHistory,
+    CallStatistics,
+    SavedSearch,
+    UploadedFile,
+    ExportReport,
+    ContactLog,
 )
+
+# 1. سفارشی‌سازی پنل ادمین برای مدل CustomUser
+@admin.register(CustomUser)
+class CustomUserAdmin(UserAdmin):
+    """
+    نمایش مدل کاربر سفارشی در پنل ادمین.
+    فیلدهای جدید (phone_number, can_create_projects) به آن اضافه شده است.
+    """
+    # فیلدهایی که در فرم ویرایش کاربر نمایش داده می‌شوند
+    fieldsets = UserAdmin.fieldsets + (
+        ('اطلاعات تکمیلی', {'fields': ('phone_number', 'can_create_projects')}),
+    )
+    # فیلدهایی که هنگام ساخت کاربر جدید نمایش داده می‌شوند
+    add_fieldsets = UserAdmin.add_fieldsets + (
+        ('اطلاعات تکمیلی', {'fields': ('phone_number', 'can_create_projects')}),
+    )
+    # فیلدهایی که در لیست کاربران نمایش داده می‌شوند
+    list_display = ('username', 'email', 'first_name', 'last_name', 'is_staff', 'phone_number', 'can_create_projects')
+    # فیلدهایی که می‌توان بر اساس آن‌ها جستجو کرد
+    search_fields = ('username', 'first_name', 'last_name', 'email', 'phone_number')
+
+
+# 2. نمایش اعضای پروژه به صورت درون‌خطی (Inline) در صفحه پروژه
+class ProjectMembershipInline(admin.TabularInline):
+    """
+    امکان افزودن و ویرایش اعضای پروژه به صورت مستقیم در صفحه همان پروژه.
+    """
+    model = ProjectMembership
+    extra = 1  # نمایش یک فرم خالی برای افزودن عضو جدید
+    autocomplete_fields = ['user'] # برای جستجوی سریع کاربران
+
 
 @admin.register(Project)
 class ProjectAdmin(admin.ModelAdmin):
-    list_display = ['id','name', 'status', 'created_by', 'created_at', 'updated_at']
-    list_filter = ['status', 'created_at', 'created_by']
-    search_fields = ['name', 'description']
-    ordering = ['-created_at']
-    readonly_fields = ['created_at', 'updated_at']
-@admin.register(UserProfile)
-class UserProfileAdmin(admin.ModelAdmin):
-    list_display = ['user','role']
+    """
+    تنظیمات پنل ادمین برای مدل پروژه.
+    """
+    list_display = ('name', 'status', 'created_by', 'created_at')
+    list_filter = ('status', 'created_at')
+    search_fields = ('name', 'description')
+    autocomplete_fields = ['created_by']
+    inlines = [ProjectMembershipInline] # اضافه کردن اعضا به صورت درون‌خطی
 
-@admin.register(ProjectCaller)
-class ProjectCallerAdmin(admin.ModelAdmin):
-    list_display = ['project', 'caller', 'assigned_at', 'is_active']
-    list_filter = ['project', 'is_active', 'assigned_at']
-    search_fields = ['project__name', 'caller__first_name', 'caller__last_name']
-    ordering = ['-assigned_at']
+
+@admin.register(ProjectMembership)
+class ProjectMembershipAdmin(admin.ModelAdmin):
+    """
+    تنظیمات پنل ادمین برای مدل عضویت در پروژه.
+    """
+    list_display = ('project', 'user', 'role', 'assigned_at')
+    list_filter = ('role', 'project')
+    search_fields = ('project__name', 'user__username')
+    autocomplete_fields = ['project', 'user']
 
 
 @admin.register(Contact)
 class ContactAdmin(admin.ModelAdmin):
-    list_display = ["id",'full_name', 'phone', 'project', 'assigned_caller', 'is_active', 'created_at']
-    list_filter = ['project', 'assigned_caller', 'is_active', 'created_at']
-    search_fields = ['full_name', 'phone', 'email']
-    ordering = ['full_name']
-    readonly_fields = ['created_at', 'updated_at']
-
-    def get_queryset(self, request):
-        return super().get_queryset(request).select_related('project', 'assigned_caller')
-
+    """
+    تنظیمات پنل ادمین برای مدل مخاطب.
+    """
+    list_display = ('full_name', 'phone', 'project', 'call_status', 'assigned_caller', 'last_call_date')
+    list_filter = ('project', 'call_status', 'is_active')
+    search_fields = ('full_name', 'phone', 'email', 'project__name')
+    # برای بهبود عملکرد، فیلدهای سنگین را در لیست نمایش ندهید
+    # raw_id_fields = ('membership',)
 
 @admin.register(Call)
 class CallAdmin(admin.ModelAdmin):
-    list_display = ['contact', 'caller', 'project', 'call_result', 'call_date', 'duration', 'follow_up_required']
-    list_filter = ['call_result', 'follow_up_required', 'project', 'call_date']
-    search_fields = ['contact__full_name', 'caller__first_name', 'caller__last_name', 'notes']
-    ordering = ['-call_date']
-    readonly_fields = ['call_date', 'created_at', 'edited_at']
+    """
+    تنظیمات پنل ادمین برای مدل تماس.
+    """
+    list_display = ('contact', 'caller', 'project', 'call_date', 'call_result', 'status', 'duration')
+    list_filter = ('project', 'call_result', 'status', 'call_date')
+    search_fields = ('contact__full_name', 'caller__username', 'notes')
+    autocomplete_fields = ['contact', 'caller', 'project']
+    readonly_fields = ('created_at', 'edited_at', 'edited_by', 'original_data') # فیلدهای فقط خواندنی
 
-    def get_queryset(self, request):
-        return super().get_queryset(request).select_related('contact', 'caller', 'project')
 
-
+# 3. ثبت سایر مدل‌ها با تنظیمات پیش‌فرض یا ساده
 @admin.register(CallEditHistory)
 class CallEditHistoryAdmin(admin.ModelAdmin):
-    list_display = ['call', 'edited_by', 'field_name', 'edit_date']
-    list_filter = ['field_name', 'edit_date', 'edited_by']
-    search_fields = ['call__contact__full_name', 'edited_by__first_name', 'edited_by__last_name']
-    ordering = ['-edit_date']
-    readonly_fields = ['edit_date']
-
+    list_display = ('call', 'edited_by', 'edit_date', 'field_name')
+    readonly_fields = [field.name for field in CallEditHistory._meta.fields] # همه فیلدها فقط خواندنی
 
 @admin.register(CallStatistics)
 class CallStatisticsAdmin(admin.ModelAdmin):
-    list_display = ['contact', 'project', 'total_calls', 'successful_calls', 'response_rate', 'last_call_date']
-    list_filter = ['project', 'last_call_date', 'updated_at']
-    search_fields = ['contact__full_name', 'project__name']
-    ordering = ['-updated_at']
-    readonly_fields = ['updated_at']
+    list_display = ('contact', 'project', 'total_calls', 'successful_calls', 'response_rate', 'last_call_date')
+    readonly_fields = ('updated_at',)
 
+@admin.register(ContactLog)
+class ContactLogAdmin(admin.ModelAdmin):
+    list_display = ('contact', 'action', 'performed_by', 'timestamp')
+    readonly_fields = [field.name for field in ContactLog._meta.fields]
 
-@admin.register(SavedSearch)
-class SavedSearchAdmin(admin.ModelAdmin):
-    list_display = ['search_name', 'user', 'is_public', 'created_at']
-    list_filter = ['is_public', 'created_at', 'user']
-    search_fields = ['search_name', 'user__first_name', 'user__last_name']
-    ordering = ['-created_at']
+# ثبت مدل‌های باقی‌مانده با حالت پیش‌فرض
+admin.site.register(SavedSearch)
+admin.site.register(UploadedFile)
+admin.site.register(ExportReport)
 
-
-@admin.register(UploadedFile)
-class UploadedFileAdmin(admin.ModelAdmin):
-    list_display = ['file_name', 'project', 'file_type', 'uploaded_by', 'records_count', 'upload_date']
-    list_filter = ['file_type', 'project', 'upload_date']
-    search_fields = ['file_name', 'project__name', 'uploaded_by__first_name', 'uploaded_by__last_name']
-    ordering = ['-upload_date']
-
-
-@admin.register(ExportReport)
-class ExportReportAdmin(admin.ModelAdmin):
-    list_display = ['file_name', 'project', 'export_type', 'exported_by', 'records_count', 'export_date']
-    list_filter = ['export_type', 'project', 'export_date']
-    search_fields = ['file_name', 'project__name', 'exported_by__first_name', 'exported_by__last_name']
-    ordering = ['-export_date']
-
-
-@admin.register(CachedStatistics)
-class CachedStatisticsAdmin(admin.ModelAdmin):
-    list_display = ['stat_type', 'stat_key', 'calculated_at', 'expires_at', 'is_expired']
-    list_filter = ['stat_type', 'calculated_at', 'expires_at']
-    search_fields = ['stat_type', 'stat_key']
-    ordering = ['-calculated_at']
-    readonly_fields = ['calculated_at']
-
-    def is_expired(self, obj):
-        return obj.is_expired()
-
-    is_expired.boolean = True
-    is_expired.short_description = 'منقضی شده'

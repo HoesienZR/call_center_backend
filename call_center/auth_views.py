@@ -5,10 +5,8 @@ from rest_framework import status
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import AllowAny
 from django.contrib.auth import authenticate
-from django.contrib.auth.models import User
-from .serializers import UserSerializer
-
-from .models import UserProfile
+from .models import CustomUser as User
+from .serializers import CustomUserSerializer
 
 
 class CustomAuthToken(ObtainAuthToken):
@@ -42,7 +40,7 @@ def login(request):
     """
     email = request.data.get('email')
     password = request.data.get('password')
-    print("email",email,"password",password)
+    print("email", email, "password", password)
     if email is None or password is None:
         return Response({
             'error': 'ایمیل و رمز عبور الزامی است'
@@ -53,7 +51,7 @@ def login(request):
         user_obj = User.objects.get(email=email)
         print(user_obj)
         user = authenticate(username=user_obj.username, password=password)
-        print (user)
+        print(user)
     except User.DoesNotExist:
         print("user set to none ")
         user = None
@@ -103,25 +101,33 @@ def user_profile(request):
     """
     دریافت اطلاعات پروفایل کاربر
     """
-    serializer = UserSerializer(request.user)
+    serializer = CustomUserSerializer(request.user)
     return Response(serializer.data)
 
-#need to fixed
+
 @api_view(['POST'])
 @permission_classes([AllowAny])
 def register(request):
     """
-    ثبت نام کاربر جدید (فقط برای تست - در پروداکشن باید محدود شود)
+    ثبت نام کاربر جدید با ایجاد پروفایل و شماره تلفن
     """
+
     username = request.data.get('username')
     password = request.data.get('password')
     email = request.data.get('email', '')
     first_name = request.data.get('first_name', '')
     last_name = request.data.get('last_name', '')
+    phone_number = request.data.get('phone_number', '')  # دریافت شماره تلفن
 
     if not username or not password:
         return Response({
             'error': 'نام کاربری و رمز عبور الزامی است'
+        }, status=status.HTTP_400_BAD_REQUEST)
+
+    # بررسی اجباری بودن شماره تلفن
+    if not phone_number:
+        return Response({
+            'error': 'شماره تلفن الزامی است'
         }, status=status.HTTP_400_BAD_REQUEST)
 
     if User.objects.filter(username=username).exists():
@@ -129,22 +135,38 @@ def register(request):
             'error': 'نام کاربری قبلاً استفاده شده است'
         }, status=status.HTTP_400_BAD_REQUEST)
 
-    user = User.objects.create_user(
-        username=username,
-        password=password,
-        email=email,
-        first_name=first_name,
-        last_name=last_name
-    )
+    # بررسی تکراری نبودن شماره تلفن (اختیاری)
+    if User.objects.filter(phone=phone_number).exists():
+        return Response({
+            'error': 'شماره تلفن قبلاً استفاده شده است'
+        }, status=status.HTTP_400_BAD_REQUEST)
 
-    token, created = Token.objects.get_or_create(user=user)
-    UserProfile.objects.create(user=user)
-    return Response({
-        'message': 'کاربر با موفقیت ایجاد شد',
-        'token': token.key,
-        'user_id': user.pk,
-        'username': user.username,
-        'email': user.email,
-    },status=status.HTTP_201_CREATED)
+    try:
+        # ایجاد کاربر
 
+        user = User.objects.create_user(
+            username=username,
+            password=password,
+            email=email,
+            first_name=first_name,
+            last_name=last_name
+        )
+        token, created = Token.objects.get_or_create(user=user)
+
+        return Response({
+            'message': 'کاربر با موفقیت ایجاد شد',
+            'token': token.key,
+            'user_id': user.pk,
+            'username': user.username,
+            'email': user.email,
+        }, status=status.HTTP_201_CREATED)
+
+    except Exception as e:
+        # در صورت بروز خطا، کاربر ایجاد شده را حذف کنیم
+        if 'user' in locals():
+            user.delete()
+
+        return Response({
+            'error': f'خطا در ایجاد کاربر: {str(e)}'
+        }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 

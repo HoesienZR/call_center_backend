@@ -16,7 +16,7 @@ import dj_database_url
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
 
-
+AUTH_USER_MODEL = 'call_center.CustomUser'
 # Quick-start development settings - unsuitable for production
 # See https://docs.djangoproject.com/en/5.2/howto/deployment/checklist/
 
@@ -30,10 +30,9 @@ ALLOWED_HOSTS = ['*']
 
 CORS_ALLOW_ALL_ORIGINS = True
 CORS_ALLOWED_ORIGINS = [
-    "http://localhost:5173",
     "http://127.0.0.1:5173",
     "http://192.168.20.28:5173",
-    'http://localhost:5173'
+    'http://localhost:5173',
 ]
 CORS_ALLOW_CREDENTIALS = True
 REST_FRAMEWORK = {
@@ -154,9 +153,19 @@ CELERY_TASK_SERIALIZER = 'json'
 CELERY_RESULT_SERIALIZER = 'json'
 CELERY_TIMEZONE = 'Asia/Tehran'
 
-# other codes ...
 
 
+
+#DATABASES = {
+#    'default': dj_database_url.config(os.path.dirname(os.path.abspath(__file__))),
+#    }
 DATABASES = {
-    'default': dj_database_url.config(os.path.dirname(os.path.abspath(__file__))),
+    'default': {
+        'ENGINE': 'django.db.backends.postgresql',
+        'NAME': 'call_center_db',
+        'USER': 'postgres',
+        'PASSWORD': '@Mirzr4848',
+        'HOST': 'localhost',
+        'PORT': '5432',
+    }
 }
