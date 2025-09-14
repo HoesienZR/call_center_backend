@@ -16,7 +16,7 @@ import dj_database_url
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
 
-
+AUTH_USER_MODEL = 'call_center.CustomUser'
 # Quick-start development settings - unsuitable for production
 # See https://docs.djangoproject.com/en/5.2/howto/deployment/checklist/
 
@@ -33,7 +33,8 @@ CORS_ALLOWED_ORIGINS = [
     "http://localhost:5173",
     "http://127.0.0.1:5173",
     "http://192.168.20.28:5173",
-    'http://localhost:5173'
+    'http://localhost:5173',
+    'https://callcenter.liara.run'
 ]
 CORS_ALLOW_CREDENTIALS = True
 REST_FRAMEWORK = {
@@ -62,7 +63,6 @@ INSTALLED_APPS = [
     'corsheaders',
     'call_center',
     'django_celery_beat',
-    'postgresql_app',
 
 ]
 USE_TZ = True
@@ -148,16 +148,33 @@ MEDIA_ROOT = os.path.join(BASE_DIR, 'media')
 MEDIA_URL = '/media/'
 
 # Celery settings
-CELERY_BROKER_URL = 'redis://localhost:6379/0'
+CELERY_BROKER_URL = 'redis://localhost:6379/0'  # یا RabbitMQ
 CELERY_RESULT_BACKEND = 'redis://localhost:6379/0'
 CELERY_ACCEPT_CONTENT = ['json']
 CELERY_TASK_SERIALIZER = 'json'
 CELERY_RESULT_SERIALIZER = 'json'
 CELERY_TIMEZONE = 'Asia/Tehran'
 
+# تنظیمات Celery Beat برای اجرای دوره‌ای
+CELERY_BEAT_SCHEDULE = {
+    'reassign-expired-contacts': {
+        'task': 'your_app.tasks.reassign_expired_contacts',
+        'schedule': 3600.0,  # هر ساعت چک کن (3600 ثانیه)
+    },
+}
 # other codes ...
 
 
 DATABASES = {
     'default': dj_database_url.config(os.path.dirname(os.path.abspath(__file__))),
 }
+#DATABASES = {
+#    'default': {
+#        'ENGINE': 'django.db.backends.postgresql',
+#        'NAME': 'call_center_db',
+#        'USER': 'postgres',
+#        'PASSWORD': '@Mirzr4848',
+#        'HOST': 'localhost',  # یا IP سرور دیتابیس
+#        'PORT': '5432',  # پورت پیش‌فرض PostgreSQL
+#        }
+#    }

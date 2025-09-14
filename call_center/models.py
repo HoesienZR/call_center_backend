@@ -1,5 +1,4 @@
 from django.db.models import functions
-from django.contrib.auth.models import User
 from django.db import models
 from django.contrib.auth.models import AbstractUser
 from django.conf import settings
@@ -26,7 +25,7 @@ class Project(models.Model):
         ('inactive', 'غیرفعال'),
         ('completed', 'تکمیل شده'),
     ]
-
+    show  = models.BooleanField(default=False)
     name = models.CharField(max_length=100, verbose_name="نام پروژه")
     description = models.TextField(blank=True, verbose_name="توضیحات")
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='active', verbose_name="وضعیت")
@@ -176,7 +175,7 @@ class ProjectMembership(models.Model):
     class Meta:
         verbose_name = "عضویت در پروژه"
         verbose_name_plural = "عضویت‌ها در پروژه‌ها"
-        unique_together = ('project', 'user') # هر کاربر در هر پروژه فقط یک نقش می‌تواند داشته باشد
+       # unique_together = ('project', 'user') # هر کاربر در هر پروژه فقط یک نقش می‌تواند داشته باشد
         ordering = ['-assigned_at']
 
     def __str__(self):
@@ -185,11 +184,10 @@ class ProjectMembership(models.Model):
 
 class Contact(models.Model):
     CALL_STATUS_CHOICES = [
-        ("pending", "در انتظار تماس"),
-        ("contacted", "تماس گرفته شده"),
-        ("follow_up", "نیاز به پیگیری"),
-        ("completed", "تکمیل شده"),
-        ("not_interested", "علاقه‌مند نیست"),
+        ('wrong_number', 'شماره اشتباه'),
+        ('answered', 'پاسخ داد'),
+        ('no_answer', 'پاسخ نداد'),
+        ('pending', 'در حال انتظار')
     ]
     user = models.OneToOneField(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="user_contact", verbose_name="کاربر مخاطب", blank=True, null=True)
     project = models.ForeignKey("Project", on_delete=models.CASCADE, related_name="contacts", verbose_name="پروژه")
@@ -208,7 +206,7 @@ class Contact(models.Model):
     call_status = models.CharField(max_length=20, choices=CALL_STATUS_CHOICES, default="pending",
                                    verbose_name="وضعیت تماس")
     last_call_date = models.DateTimeField(null=True, blank=True, verbose_name="آخرین تماس")
-    custom_fields = models.TextField(blank=True, verbose_name="فیلدهای سفارشی")
+    custom_fields = models.TextField(blank=True, verbose_name="فیلدهای سفارشی",null=True)
     is_active = models.BooleanField(default=True, verbose_name="فعال")
     created_at = models.DateTimeField(auto_now_add=True, verbose_name="تاریخ ایجاد")
     updated_at = models.DateTimeField(auto_now=True, verbose_name="تاریخ به‌روزرسانی")
@@ -284,28 +282,23 @@ class ProjectCaller(models.Model):
 class Call(models.Model):
     """مدل برای ثبت تماس‌ها"""
     CALL_RESULT_CHOICES = [
-        ('answered', 'پاسخ داد'),
-        ('no_answer', 'پاسخ نداد'),
-        ('busy', 'مشغول'),
-        ('unreachable', 'در دسترس نیست'),
-        ('wrong_number', 'شماره اشتباه'),
+        ('interested', 'علاقه‌مند هست'),
+        ('no_time', 'وقت ندارد'),
         ('not_interested', 'علاقه‌مند نیست'),
-        ('callback_requested', 'درخواست تماس مجدد'),
     ]
 
     CALL_STATUS_CHOICES = [
-        ('pending', 'در انتظار'),
-        ('in_progress', 'در حال انجام'),
-        ('completed', 'تکمیل شده'),
-        ('follow_up', 'نیاز به پیگیری'),
-        ('cancelled', 'لغو شده'),
+        ('wrong_number', 'شماره اشتباه'),
+        ('answered', 'پاسخ داد'),
+        ('no_answer', 'پاسخ نداد'),
+        ('pending',"در انتظار")
     ]
     contact = models.ForeignKey(Contact, on_delete=models.CASCADE, related_name='calls', verbose_name="مخاطب")
     caller = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='calls',
                                verbose_name="تماس‌گیرنده")
     project = models.ForeignKey(Project, on_delete=models.CASCADE, related_name='calls', verbose_name="پروژه")
     call_date = models.DateTimeField(auto_now_add=True, verbose_name="تاریخ تماس")
-    call_result = models.CharField(max_length=50, choices=CALL_RESULT_CHOICES, verbose_name="نتیجه تماس")
+    call_result = models.CharField(max_length=50, choices=CALL_RESULT_CHOICES, verbose_name="نتیجه تماس",blank=True,null=True)
     status = models.CharField(max_length=20, choices=CALL_STATUS_CHOICES, default='pending', verbose_name="وضعیت")
     notes = models.TextField(blank=True, verbose_name="یادداشت‌ها")
     feedback = models.TextField(blank=True, verbose_name="بازخورد")

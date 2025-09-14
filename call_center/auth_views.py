@@ -38,22 +38,18 @@ def login(request):
     """
     ورود کاربر و دریافت توکن
     """
-    email = request.data.get('email')
+    phone = request.data.get('phone')
     password = request.data.get('password')
-    print("email", email, "password", password)
-    if email is None or password is None:
+    if phone is None or password is None:
         return Response({
-            'error': 'ایمیل و رمز عبور الزامی است'
+            'error': 'شماره تماس و رمز عبور الزامی است'
         }, status=status.HTTP_400_BAD_REQUEST)
 
     # Try to find user by email
     try:
-        user_obj = User.objects.get(email=email)
-        print(user_obj)
+        user_obj = User.objects.get(phone_number=phone)
         user = authenticate(username=user_obj.username, password=password)
-        print(user)
     except User.DoesNotExist:
-        print("user set to none ")
         user = None
 
     if not user:
@@ -77,6 +73,7 @@ def login(request):
         'is_staff': user.is_staff,
         'is_superuser': user.is_superuser,
         'full_name': user.get_full_name(),
+        "phone": phone,
     })
 
 
@@ -136,7 +133,7 @@ def register(request):
         }, status=status.HTTP_400_BAD_REQUEST)
 
     # بررسی تکراری نبودن شماره تلفن (اختیاری)
-    if User.objects.filter(phone=phone_number).exists():
+    if User.objects.filter(phone_number=phone_number).exists():
         return Response({
             'error': 'شماره تلفن قبلاً استفاده شده است'
         }, status=status.HTTP_400_BAD_REQUEST)
@@ -149,7 +146,9 @@ def register(request):
             password=password,
             email=email,
             first_name=first_name,
-            last_name=last_name
+            last_name=last_name,
+            phone_number=phone_number
+
         )
         token, created = Token.objects.get_or_create(user=user)
 

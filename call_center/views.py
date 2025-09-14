@@ -1,9 +1,9 @@
-
+from django.db.models import Count, Avg, Q
 from rest_framework import viewsets, status
 from rest_framework.response import Response
-from rest_framework.decorators import action
+from rest_framework.decorators import action, api_view, permission_classes
 from rest_framework.permissions import IsAuthenticated, IsAdminUser
-
+from rest_framework.decorators import action
 from django.db import transaction
 from datetime import datetime
 from .permission import  IsProjectCaller, IsProjectAdmin, IsProjectAdminOrCaller, IsReadOnlyOrProjectAdmin
@@ -88,8 +88,476 @@ class ProjectViewSet(viewsets.ModelViewSet):
             project = serializer.save(created_by=user)
             ProjectMembership.objects.create(project=project, user=user, role='admin')
 
-    # --- اکشن‌های گزارش‌گیری با پرمیشن‌های صحیح ---
 
+    # --- اکشن‌های گزارش‌گیری با پرمیشن‌های صحیح ---
+    # در ProjectViewSet اضافه کنید:
+
+    # در ProjectViewSet اضافه کنید:
+    @action(detail=True, methods=['get'], url_path='user-role',
+            permission_classes=[IsAuthenticated])
+    def get_user_role(self, request, pk=None):
+        """
+        دریافت نقش کاربر فعلی در پروژه مشخص شده
+        GET /api/projects/{project_id}/user-role/
+        """
+        project = self.get_object()
+        user = request.user
+        print(project)
+        print(user)
+        # بررسی عضویت کاربر در پروژه
+        try:
+            print("hello")
+            membership = ProjectMembership.objects.get(project=project, user=user)
+            print(membership)
+            return Response({
+                'project_id': project.id,
+                'project_name': project.name,
+                'user_id': user.id,
+                'username': user.username,
+                'full_name': user.get_full_name() or user.username,
+                'role': membership.role,
+                'role_display': membership.get_role_display(),
+                'assigned_at': membership.assigned_at,
+                'is_admin': membership.role == 'admin',
+                'is_caller': membership.role == 'caller',
+                'is_contact': membership.role == 'contact',
+                "phone":user.phone_number
+            }, status=status.HTTP_200_OK)
+
+        except ProjectMembership.DoesNotExist:
+            # اگر کاربر superuser باشد ولی عضو پروژه نباشد
+            if user.is_superuser:
+                return Response({
+                    'project_id': project.id,
+                    'project_name': project.name,
+                    'user_id': user.id,
+                    'username': user.username,
+                    'full_name': user.get_full_name() or user.username,
+                    'role': 'superuser',
+                    'role_display': 'مدیر کل سیستم',
+                    'assigned_at': None,
+                    'is_admin': True,
+                    'is_caller': False,
+                    'is_contact': False
+                }, status=status.HTTP_200_OK)
+            else:
+                return Response({
+                    'detail': 'شما عضو این پروژه نیستید'
+                }, status=status.HTTP_403_FORBIDDEN)
+
+    @action(detail=False, methods=['post'], url_path='check-user-role',
+            permission_classes=[IsAuthenticated])
+    def check_user_role(self, request):
+        """
+        بررسی نقش کاربر مشخص شده در پروژه مشخص شده
+        POST /api/projects/check-user-role/
+        Body: {"project_id": 1, "user_id": 2}
+        """
+        project_id = request.data.get('project_id')
+        user_id = request.data.get('user_id')
+
+        if not project_id:
+            return Response({
+                'error': 'شناسه پروژه الزامی است'
+            }, status=status.HTTP_400_BAD_REQUEST)
+
+        if not user_id:
+            return Response({
+                'error': 'شناسه کاربر الزامی است'
+            }, status=status.HTTP_400_BAD_REQUEST)
+
+        try:
+            project = Project.objects.get(id=project_id)
+            target_user = CustomUser.objects.get(id=user_id)
+        except Project.DoesNotExist:
+            return Response({
+                'error': 'پروژه یافت نشد'
+            }, status=status.HTTP_404_NOT_FOUND)
+        except CustomUser.DoesNotExist:
+            return Response({
+                'error': 'کاربر یافت نشد'
+            }, status=status.HTTP_404_NOT_FOUND)
+
+        # بررسی دسترسی - فقط ادمین پروژه یا superuser می‌تواند نقش سایرین را بررسی کند
+        requesting_user = request.user
+        if not requesting_user.is_superuser:
+            try:
+                requesting_membership = ProjectMembership.objects.get(
+                    project=project, user=requesting_user
+                )
+                if requesting_membership.role != 'admin':
+                    return Response({
+                        'detail': 'فقط ادمین پروژه می‌تواند نقش سایر کاربران را بررسی کند'
+                    }, status=status.HTTP_403_FORBIDDEN)
+            except ProjectMembership.DoesNotExist:
+                return Response({
+                    'detail': 'شما عضو این پروژه نیستید'
+                }, status=status.HTTP_403_FORBIDDEN)
+
+        # بررسی عضویت کاربر هدف در پروژه
+        try:
+            membership = ProjectMembership.objects.get(project=project, user=target_user)
+            return Response({
+                'project_id': project.id,
+                'project_name': project.name,
+                'user_id': target_user.id,
+                'username': target_user.username,
+                'full_name': target_user.get_full_name() or target_user.username,
+                'role': membership.role,
+                'role_display': membership.get_role_display(),
+                'assigned_at': membership.assigned_at,
+                'is_admin': membership.role == 'admin',
+                'is_caller': membership.role == 'caller',
+                'is_contact': membership.role == 'contact'
+            }, status=status.HTTP_200_OK)
+
+        except ProjectMembership.DoesNotExist:
+            # اگر کاربر هدف superuser باشد ولی عضو پروژه نباشد
+            if target_user.is_superuser:
+                return Response({
+                    'project_id': project.id,
+                    'project_name': project.name,
+                    'user_id': target_user.id,
+                    'username': target_user.username,
+                    'full_name': target_user.get_full_name() or target_user.username,
+                    'role': 'superuser',
+                    'role_display': 'مدیر کل سیستم',
+                    'assigned_at': None,
+                    'is_admin': True,
+                    'is_caller': False,
+                    'is_contact': False
+                }, status=status.HTTP_200_OK)
+            else:
+                return Response({
+                    'project_id': project.id,
+                    'project_name': project.name,
+                    'user_id': target_user.id,
+                    'username': target_user.username,
+                    'full_name': target_user.get_full_name() or target_user.username,
+                    'role': None,
+                    'role_display': 'عضو نیست',
+                    'assigned_at': None,
+                    'is_admin': False,
+                    'is_caller': False,
+                    'is_contact': False,
+                    'is_member': False
+                }, status=status.HTTP_200_OK)
+    @action(detail=True, methods=["post"], url_path='upload-callers')
+    def upload_callers(self, request, pk=None):
+        """
+        آپلود فایل اکسل کاربران موجود بر اساس شماره تلفن و اضافه کردن آنها به عنوان تماس‌گیرنده پروژه
+        """
+        project = self.get_object()
+
+        # بررسی دسترسی ادمین بودن در پروژه
+        if not (request.user.is_superuser or ProjectMembership.objects.filter(
+                project=project, user=request.user, role='admin'
+        ).exists()):
+            return Response({
+                "detail": "شما ادمین این پروژه نیستید و نمی‌توانید تماس‌گیرنده اضافه کنید."
+            }, status=status.HTTP_403_FORBIDDEN)
+
+        file = request.FILES.get("file")
+        if not file:
+            return Response({"error": "فایل ارسال نشده است"}, status=status.HTTP_400_BAD_REQUEST)
+
+        # بررسی نوع فایل
+        if not file.name.endswith(('.xlsx', '.xls')):
+            return Response({
+                "error": "فقط فایل‌های اکسل (.xlsx, .xls) پشتیبانی می‌شوند"
+            }, status=status.HTTP_400_BAD_REQUEST)
+
+        try:
+            import pandas as pd
+
+            # خواندن فایل اکسل
+            try:
+                df = pd.read_excel(file)
+            except Exception as e:
+                return Response({
+                    "error": f"خطا در خواندن فایل اکسل: {str(e)}"
+                }, status=status.HTTP_400_BAD_REQUEST)
+
+            # بررسی وجود ستون شماره تلفن
+            if 'phone_number' not in df.columns:
+                return Response({
+                    "error": "ستون 'phone_number' الزامی است",
+                    "required_columns": ["phone_number"],
+                    "available_columns": list(df.columns)
+                }, status=status.HTTP_400_BAD_REQUEST)
+
+            successful_callers = []
+            failed_callers = []
+            updated_callers = []
+
+            with transaction.atomic():
+                # ذخیره اطلاعات فایل آپلود شده
+                uploaded_file = UploadedFile.objects.create(
+                    file_name=file.name,
+                    file_path=f"uploads/callers/{file.name}",
+                    file_type='callers',
+                    records_count=len(df),
+                    project=project,
+                    uploaded_by=request.user
+                )
+
+                for index, row in df.iterrows():
+                    try:
+                        # تمیز کردن شماره تلفن
+                        phone_number = clean_string_field(str(row.get('phone_number', '')))
+
+                        if not phone_number or phone_number == 'nan':
+                            failed_callers.append({
+                                'row': index + 2,
+                                'phone_number': phone_number,
+                                'error': 'شماره تلفن الزامی است'
+                            })
+                            continue
+
+                        # نرمال‌سازی و اعتبارسنجی شماره تلفن
+                        try:
+                            normalized_phone = normalize_phone_number(phone_number)
+                            if not validate_phone_number(normalized_phone):
+                                failed_callers.append({
+                                    'row': index + 2,
+                                    'phone_number': phone_number,
+                                    'error': 'شماره تلفن نامعتبر است'
+                                })
+                                continue
+                        except:
+                            failed_callers.append({
+                                'row': index + 2,
+                                'phone_number': phone_number,
+                                'error': 'شماره تلفن نامعتبر است'
+                            })
+                            continue
+
+                        # جستجوی کاربر بر اساس شماره تلفن
+                        try:
+                            normalized_phone = "0" + normalized_phone
+                            user = CustomUser.objects.get(phone_number=normalized_phone)
+                        except CustomUser.DoesNotExist:
+                            failed_callers.append({
+                                'row': index + 2,
+                                'phone_number': phone_number,
+                                'error': 'کاربری با این شماره تلفن در سیستم یافت نشد'
+                            })
+                            continue
+
+                        # بررسی اینکه آیا کاربر قبلاً عضو پروژه است
+                        existing_membership = ProjectMembership.objects.filter(
+                            project=project,
+                            user=user
+                        ).first()
+
+                        if existing_membership:
+                            # اگر قبلاً عضو است، نقشش را به caller تغییر می‌دهیم
+                            old_role = existing_membership.role
+                            if old_role != 'caller':
+                                existing_membership.role = 'caller'
+                                existing_membership.save()
+
+                                updated_callers.append({
+                                    'user_id': user.id,
+                                    'username': user.username,
+                                    'full_name': user.get_full_name() or user.username,
+                                    'phone_number': user.phone_number,
+                                    'old_role': old_role,
+                                    'new_role': 'caller',
+                                    'action': 'role_updated'
+                                })
+                            else:
+                                # اگر قبلاً تماس‌گیرنده بوده، در لیست به‌روزرسانی قرار نمی‌گیرد
+                                updated_callers.append({
+                                    'user_id': user.id,
+                                    'username': user.username,
+                                    'full_name': user.get_full_name() or user.username,
+                                    'phone_number': user.phone_number,
+                                    'old_role': old_role,
+                                    'new_role': 'caller',
+                                    'action': 'already_caller'
+                                })
+                        else:
+                            # اضافه کردن کاربر جدید به پروژه با نقش caller
+                            ProjectMembership.objects.create(
+                                project=project,
+                                user=user,
+                                role='caller'
+                            )
+
+                            successful_callers.append({
+                                'user_id': user.id,
+                                'username': user.username,
+                                'full_name': user.get_full_name() or user.username,
+                                'phone_number': user.phone_number,
+                                'role': 'caller',
+                                'action': 'added_to_project'
+                            })
+
+                    except Exception as e:
+                        failed_callers.append({
+                            'row': index + 2,
+                            'phone_number': phone_number if 'phone_number' in locals() else 'نامشخص',
+                            'error': str(e)
+                        })
+
+            # آماده کردن پاسخ
+            response_data = {
+                'message': 'فایل تماس‌گیرندگان با موفقیت پردازش شد',
+                'file_id': uploaded_file.id,
+                'total_records': len(df),
+                'successful_count': len(successful_callers),
+                'updated_count': len(updated_callers),
+                'failed_count': len(failed_callers),
+                'project_id': project.id,
+                'project_name': project.name
+            }
+
+            if successful_callers:
+                response_data['successful_callers'] = successful_callers
+
+            if updated_callers:
+                response_data['updated_callers'] = updated_callers
+
+            if failed_callers:
+                response_data['failed_callers'] = failed_callers
+
+            # تنظیم وضعیت پاسخ
+            if failed_callers and not successful_callers and not updated_callers:
+                status_code = status.HTTP_400_BAD_REQUEST
+                response_data['message'] = 'پردازش فایل با خطا مواجه شد'
+            elif failed_callers:
+                status_code = status.HTTP_207_MULTI_STATUS
+                response_data['message'] = 'فایل با موفقیت جزئی پردازش شد'
+            else:
+                status_code = status.HTTP_201_CREATED
+
+            return Response(response_data, status=status_code)
+
+        except Exception as e:
+            logger.error(f"خطا در پردازش فایل تماس‌گیرندگان: {str(e)}")
+            return Response({
+                "error": f"خطای داخلی سرور: {str(e)}"
+            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+    @action(detail=True, methods=['post'], url_path='toggle-user-role',
+            permission_classes=[IsAuthenticated, IsProjectAdmin])
+    def toggle_user_role(self, request, pk=None):
+        """
+        تغییر نقش کاربر مشخص شده بین caller و contact در یک پروژه
+        فقط ادمین پروژه می‌تواند نقش سایر کاربران را تغییر دهد
+        کاربر ادمین در درخواست user_id کاربر دیگری را ارسال می‌کند
+        """
+        project = self.get_object()
+        user_id = request.data.get('user_id')
+
+        if not user_id:
+            return Response({
+                'error': 'شناسه کاربر الزامی است'
+            }, status=status.HTTP_400_BAD_REQUEST)
+
+        try:
+            # پیدا کردن کاربر
+            user = CustomUser.objects.get(id=user_id)
+        except CustomUser.DoesNotExist:
+            return Response({
+                'error': 'کاربر یافت نشد'
+            }, status=status.HTTP_404_NOT_FOUND)
+
+        try:
+            # پیدا کردن عضویت کاربر در پروژه
+            membership = ProjectMembership.objects.get(project=project, user=user)
+        except ProjectMembership.DoesNotExist:
+            return Response({
+                'error': 'کاربر عضو این پروژه نیست'
+            }, status=status.HTTP_404_NOT_FOUND)
+
+        # بررسی اینکه نقش فعلی admin نباشد
+        if membership.role == 'admin':
+            return Response({
+                'error': 'نمی‌توان نقش ادمین را تغییر داد'
+            }, status=status.HTTP_400_BAD_REQUEST)
+
+        # تغییر نقش
+        with transaction.atomic():
+            old_role = membership.role
+
+            if membership.role == 'caller':
+                # تغییر از caller به contact
+                new_role = 'contact'
+
+                # آزاد کردن تمام مخاطبینی که به این کاربر تخصیص داده شده‌اند
+                assigned_contacts = Contact.objects.filter(
+                    project=project,
+                    assigned_caller=user
+                )
+                assigned_contacts_count = assigned_contacts.count()
+                assigned_contacts.update(assigned_caller=None)
+
+            elif membership.role == 'contact':
+                # تغییر از contact به caller
+                new_role = 'caller'
+                assigned_contacts_count = 0
+
+            else:
+                return Response({
+                    'error': f'نقش {membership.role} قابل تغییر نیست'
+                }, status=status.HTTP_400_BAD_REQUEST)
+
+            # به‌روزرسانی نقش
+            membership.role = new_role
+            membership.save()
+
+            # لاگ کردن تغییرات
+        response_data = {
+            'message': 'نقش کاربر با موفقیت تغییر یافت',
+            'user_id': user.id,
+            'username': user.username,
+            'full_name': user.get_full_name(),
+            'old_role': old_role,
+            'new_role': new_role,
+            'new_role_display': membership.get_role_display()
+        }
+
+        # اگر از caller به contact تغییر یافت، تعداد مخاطبین آزاد شده را اضافه کن
+        if old_role == 'caller' and assigned_contacts_count > 0:
+            response_data['released_contacts_count'] = assigned_contacts_count
+            response_data['message'] += f' و {assigned_contacts_count} مخاطب آزاد شد'
+
+        return Response(response_data, status=status.HTTP_200_OK)
+
+    # اضافه کردن این اکشن به ProjectViewSet موجود
+    @action(detail=True, methods=['get'], url_path='members',
+            permission_classes=[IsAuthenticated, IsProjectAdmin])
+    def get_project_members(self, request, pk=None):
+        """
+        دریافت لیست اعضای یک پروژه با اطلاعات کامل
+        """
+        project = self.get_object()
+        # دریافت تمام اعضای پروژه از طریق ProjectMembership
+        memberships = ProjectMembership.objects.filter(project=project).exclude(role="admin").select_related('user')
+
+        members_data = []
+        for membership in memberships:
+            user = membership.user
+            members_data.append({
+                'id': user.id,
+                'username': user.username,
+                'first_name': user.first_name,
+                'last_name': user.last_name,
+                'full_name': user.get_full_name() if user.get_full_name() else user.username,
+                'phone_number': user.phone_number,
+                'role': membership.role,
+                'role_display': membership.get_role_display(),
+                'assigned_at': membership.assigned_at,
+                'email': user.email
+            })
+
+        return Response({
+            'project_id': project.id,
+            'project_name': project.name,
+            'members_count': len(members_data),
+            'members': members_data
+        }, status=status.HTTP_200_OK)
     @action(detail=True, methods=["get"], permission_classes=[IsAuthenticated, IsProjectAdminOrCaller])
     def statistics(self, request, pk=None):
         project = self.get_object()
@@ -129,36 +597,66 @@ class ProjectViewSet(viewsets.ModelViewSet):
 class ProjectCallerViewSet(viewsets.ModelViewSet):
     queryset = ProjectCaller.objects.all()
     serializer_class = ProjectSerializer
-    permission_classes = [IsAdminUser,IsAuthenticated]
+    permission_classes = [IsProjectAdmin,IsAuthenticated]
 
 
 class ContactViewSet(viewsets.ModelViewSet):
     queryset = Contact.objects.all()
     serializer_class = ContactSerializer
     permission_classes = [IsAuthenticated, IsProjectAdminOrCaller]
+
     def get_serializer_context(self):
         return {
-        'request': self.request,
-        'format': self.format_kwarg,
-        'view': self
+            'request': self.request,
+            'format': self.format_kwarg,
+            'view': self
         }
-
-    def perform_create(self, serializer):
-        serializer.save()
 
     def get_queryset(self):
         """
-        - ادمین‌ها: مخاطبین تمام پروژه‌هایی که در آن عضو هستند را می‌بینند.
-        - تماس‌گیرندگان: فقط مخاطبینی که به خودشان تخصیص داده شده را می‌بینند.
+        فیلتر کردن مخاطبین بر اساس نقش کاربر و پارامتر project_id
         """
         user = self.request.user
+        project_id = self.request.query_params.get('project_id')
+
+        # اگر project_id مشخص شده، فقط مخاطبین آن پروژه را برگردان
+        if project_id:
+            try:
+                project = Project.objects.get(id=project_id)
+
+                # بررسی دسترسی کاربر به پروژه
+                if not (user.is_superuser or ProjectMembership.objects.filter(
+                        project=project, user=user
+                ).exists()):
+                    return Contact.objects.none()
+
+                # بررسی نقش کاربر در پروژه
+                is_admin = ProjectMembership.objects.filter(
+                    project=project, user=user, role='admin'
+                ).exists()
+
+                if user.is_superuser or is_admin:
+                    # ادمین همه مخاطبین پروژه را می‌بیند
+                    return Contact.objects.filter(
+                        project=project,
+                        call_status="pending"
+                    ).select_related('assigned_caller', 'project')
+                else:
+                    # تماس‌گیرنده فقط مخاطبین تخصیص یافته به خودش را می‌بیند
+                    return Contact.objects.filter(
+                        project=project,
+                        assigned_caller=user,
+                        call_status="pending"
+                    ).select_related('assigned_caller', 'project')
+
+            except Project.DoesNotExist:
+                return Contact.objects.none()
+
+        # اگر project_id مشخص نشده، پردازش عادی
         if user.is_superuser:
             return Contact.objects.all()
 
-        # ابتدا پروژه‌هایی که کاربر در آن‌ها عضو است را پیدا می‌کنیم
         user_projects = Project.objects.filter(members=user)
-
-        # بررسی می‌کنیم آیا کاربر در هیچ‌کدام از این پروژه‌ها نقش ادمین دارد یا خیر
         is_admin_in_any_project = ProjectMembership.objects.filter(
             project__in=user_projects,
             user=user,
@@ -166,23 +664,400 @@ class ContactViewSet(viewsets.ModelViewSet):
         ).exists()
 
         if is_admin_in_any_project:
-            print("admin")
-            # اگر کاربر در حداقل یک پروژه ادمین باشد، تمام مخاطبین آن پروژه‌ها را برمی‌گردانیم
-            return Contact.objects.filter(project__in=user_projects)
+            return Contact.objects.filter(
+                project__in=user_projects,
+                call_status="pending"
+            )
         else:
-            print('tamas')
-            # اگر کاربر ادمین نیست (و فقط تماس‌گیرنده است)، فقط مخاطبین تخصیص داده شده به خودش را برمی‌گردانیم
-            return Contact.objects.filter(assigned_caller=user)
+            return Contact.objects.filter(
+                assigned_caller=user,
+                call_status="pending"
+            )
 
     def perform_create(self, serializer):
+        """
+        ثبت مخاطب جدید با اعمال منطق تخصیص
+        """
         project = serializer.validated_data['project']
-        # پرمیشن IsProjectAdminOrCaller از قبل دسترسی را چک کرده است.
-        serializer.save()
+        user = self.request.user
+
+        # اگر کاربر تماس‌گیرنده است، مخاطب به خودش تخصیص داده می‌شود
+        if not serializer.validated_data.get('assigned_caller'):
+            try:
+                membership = ProjectMembership.objects.get(project=project, user=user)
+                if membership.role == 'caller':
+                    serializer.validated_data['assigned_caller'] = user
+            except ProjectMembership.DoesNotExist:
+                pass
+
+        serializer.save(created_by=user)
+
+    @action(detail=False, methods=['post'], url_path='upload-contacts')
+    def upload_contacts_file(self, request):
+        """
+        آپلود فایل اکسل مخاطبین و اتصال آنها به پروژه با تخصیص تصادفی تماس‌گیرندگان
+        """
+        project_id = request.data.get("project_id")
+        if not project_id:
+            return Response({"error": "شناسه پروژه الزامی است"}, status=status.HTTP_400_BAD_REQUEST)
+
+        try:
+            project = Project.objects.get(id=project_id)
+            # بررسی دسترسی ادمین بودن در پروژه
+            if not (request.user.is_superuser or ProjectMembership.objects.filter(
+                    project=project, user=request.user, role='admin'
+            ).exists()):
+                return Response({
+                    "detail": "شما ادمین این پروژه نیستید و نمی‌توانید فایل آپلود کنید."
+                }, status=status.HTTP_403_FORBIDDEN)
+        except Project.DoesNotExist:
+            return Response({"error": "پروژه یافت نشد"}, status=status.HTTP_404_NOT_FOUND)
+
+        file = request.FILES.get("file")
+        if not file:
+            return Response({"error": "فایل ارسال نشده است"}, status=status.HTTP_400_BAD_REQUEST)
+
+        # بررسی نوع فایل
+        if not file.name.endswith(('.xlsx', '.xls')):
+            return Response({
+                "error": "فقط فایل‌های اکسل (.xlsx, .xls) پشتیبانی می‌شوند"
+            }, status=status.HTTP_400_BAD_REQUEST)
+
+        try:
+            import pandas as pd
+            import random
+
+            # خواندن فایل اکسل
+            try:
+                df = pd.read_excel(file)
+            except Exception as e:
+                return Response({
+                    "error": f"خطا در خواندن فایل اکسل: {str(e)}"
+                }, status=status.HTTP_400_BAD_REQUEST)
+
+            # بررسی وجود ستون‌های ضروری
+            required_columns = ['phone']
+            optional_columns = ['full_name', 'email', 'address', 'custom_fields']  # افزودن custom_fields
+
+            missing_columns = [col for col in required_columns if col not in df.columns]
+            if missing_columns:
+                return Response({
+                    "error": f"ستون‌های ضروری موجود نیستند: {', '.join(missing_columns)}",
+                    "required_columns": required_columns,
+                    "optional_columns": optional_columns,
+                    "available_columns": list(df.columns)
+                }, status=status.HTTP_400_BAD_REQUEST)
+
+            # دریافت لیست تماس‌گیرندگان فعال پروژه
+            project_callers = list(ProjectMembership.objects.filter(
+                project=project, role='caller'
+            ).select_related('user'))
+
+            if not project_callers:
+                return Response({
+                    "error": "در این پروژه هیچ تماس‌گیرنده‌ای وجود ندارد"
+                }, status=status.HTTP_400_BAD_REQUEST)
+
+            successful_contacts = []
+            failed_contacts = []
+            updated_contacts = []
+
+            with transaction.atomic():
+                # ذخیره اطلاعات فایل آپلود شده
+                uploaded_file = UploadedFile.objects.create(
+                    file_name=file.name,
+                    file_path=f"uploads/contacts/{file.name}",
+                    file_type='contacts',
+                    records_count=len(df),
+                    project=project,
+                    uploaded_by=request.user
+                )
+
+                for index, row in df.iterrows():
+                    try:
+                        # تمیز کردن داده‌ها
+                        phone = clean_string_field(str(row.get('phone', '')))
+                        full_name = clean_string_field(str(row.get('full_name', '')))
+                        email = clean_string_field(str(row.get('email', '')))
+                        address = clean_string_field(str(row.get('address', '')))
+                        custom_fields = clean_string_field(str(row.get('custom_fields', '')))  # افزودن custom_fields
+
+                        if not phone:
+                            failed_contacts.append({
+                                'row': index + 2,
+                                'data': row.to_dict(),
+                                'error': 'شماره تلفن الزامی است'
+                            })
+                            continue
+
+                        # اعتبارسنجی شماره تلفن
+                        normalized_phone = normalize_phone_number(phone)
+                        if not validate_phone_number(normalized_phone):
+                            failed_contacts.append({
+                                'row': index + 2,
+                                'data': row.to_dict(),
+                                'error': 'شماره تلفن نامعتبر است'
+                            })
+                            continue
+
+                        # اگر نام کامل وجود نداشت
+                        if not full_name:
+                            full_name = f"مخاطب {normalized_phone}"
+
+                        # بررسی وجود مخاطب
+                        existing_contact = Contact.objects.filter(
+                            project=project,
+                            phone=normalized_phone
+                        ).first()
+
+                        if existing_contact:
+                            # به‌روزرسانی مخاطب موجود
+                            existing_contact.full_name = full_name
+                            existing_contact.email = email if email and '@' in email else existing_contact.email
+                            existing_contact.address = address or existing_contact.address
+                            existing_contact.custom_fields = custom_fields or existing_contact.custom_fields  # به‌روزرسانی custom_fields
+                            existing_contact.is_active = True
+
+                            if not existing_contact.assigned_caller:
+                                random_caller = random.choice(project_callers)
+                                existing_contact.assigned_caller = random_caller.user
+
+                            existing_contact.save()
+
+                            updated_contacts.append({
+                                'id': existing_contact.id,
+                                'full_name': existing_contact.full_name,
+                                'phone': existing_contact.phone,
+                                'assigned_caller': existing_contact.assigned_caller.get_full_name() if existing_contact.assigned_caller else None,
+                                'custom_fields': existing_contact.custom_fields,  # افزودن custom_fields
+                                'action': 'updated'
+                            })
+                        else:
+                            # ایجاد مخاطب جدید
+                            random_caller = random.choice(project_callers)
+                            normalized_phone = "0" + normalized_phone
+                            new_contact = Contact.objects.create(
+                                project=project,
+                                full_name=full_name,
+                                phone=normalized_phone,
+                                email=email if email and '@' in email else '',
+                                address=address or '',
+                                custom_fields=custom_fields or '',  # افزودن custom_fields
+                                assigned_caller=random_caller.user,
+                                call_status='pending',
+                                created_by=request.user
+                            )
+
+                            successful_contacts.append({
+                                'id': new_contact.id,
+                                'full_name': new_contact.full_name,
+                                'phone': new_contact.phone,
+                                'assigned_caller': new_contact.assigned_caller.get_full_name(),
+                                'assigned_caller_id': new_contact.assigned_caller.id,
+                                'custom_fields': new_contact.custom_fields,  # افزودن custom_fields
+                                'action': 'created'
+                            })
+
+                    except Exception as e:
+                        failed_contacts.append({
+                            'row': index + 2,
+                            'data': row.to_dict() if hasattr(row, 'to_dict') else str(row),
+                            'error': str(e)
+                        })
+
+            # آماده کردن پاسخ
+            response_data = {
+                'message': 'فایل مخاطبین با موفقیت پردازش شد',
+                'file_id': uploaded_file.id,
+                'total_records': len(df),
+                'successful_count': len(successful_contacts),
+                'updated_count': len(updated_contacts),
+                'failed_count': len(failed_contacts),
+                'project_id': project.id,
+                'project_name': project.name,
+                'callers_count': len(project_callers)
+            }
+
+            if successful_contacts:
+                response_data['successful_contacts'] = successful_contacts
+
+            if updated_contacts:
+                response_data['updated_contacts'] = updated_contacts
+
+            if failed_contacts:
+                response_data['failed_contacts'] = failed_contacts
+
+            if failed_contacts and not successful_contacts and not updated_contacts:
+                status_code = status.HTTP_400_BAD_REQUEST
+                response_data['message'] = 'پردازش فایل با خطا مواجه شد'
+            elif failed_contacts:
+                status_code = status.HTTP_207_MULTI_STATUS
+                response_data['message'] = 'فایل با موفقیت جزئی پردازش شد'
+            else:
+                status_code = status.HTTP_201_CREATED
+
+            return Response(response_data, status=status_code)
+
+        except Exception as e:
+            logger.error(f"خطا در پردازش فایل مخاطبین: {str(e)}")
+            return Response({
+                "error": f"خطای داخلی سرور: {str(e)}"
+            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+    @action(detail=False, methods=['post'], url_path='request_new')
+    def request_new_contact(self, request):
+        """
+        درخواست مخاطب جدید برای تماس‌گیرنده
+        """
+        project_id = request.data.get('project_id')
+        if not project_id:
+            return Response(
+                {"detail": "شناسه پروژه الزامی است."},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        try:
+            project = Project.objects.get(id=project_id)
+
+            # بررسی عضویت کاربر در پروژه
+            if not ProjectMembership.objects.filter(
+                    project=project, user=request.user
+            ).exists():
+                return Response(
+                    {"detail": "شما عضو این پروژه نیستید."},
+                    status=status.HTTP_403_FORBIDDEN
+                )
+
+            # یافتن مخاطب آزاد (بدون تخصیص)
+            available_contact = Contact.objects.filter(
+                project=project,
+                assigned_caller__isnull=True,
+                call_status='pending',
+                is_active=True
+            ).first()
+            print(available_contact)
+            if available_contact:
+                # تخصیص مخاطب به کاربر فعلی
+                available_contact.assigned_caller = request.user
+                available_contact.save()
+
+                return Response(
+                    {"detail": "مخاطب جدیدی به شما تخصیص یافت."},
+                    status=status.HTTP_200_OK
+                )
+            else:
+                return Response(
+                    {"detail": "در حال حاضر مخاطب آزادی برای تخصیص وجود ندارد."},
+                    status=status.HTTP_404_NOT_FOUND
+                )
+
+        except Project.DoesNotExist:
+            return Response(
+                {"detail": "پروژه یافت نشد."},
+                status=status.HTTP_404_NOT_FOUND
+            )
+
+    @action(detail=True, methods=['post'], url_path='release')
+    def release_contact(self, request, pk=None):
+        """
+        آزاد کردن مخاطب توسط تماس‌گیرنده یا ادمین
+        """
+        contact = self.get_object()
+        user = request.user
+
+        # بررسی دسترسی
+        is_admin = ProjectMembership.objects.filter(
+            project=contact.project, user=user, role='admin'
+        ).exists()
+
+        if contact.assigned_caller == user or is_admin or user.is_superuser:
+            contact.assigned_caller = None
+            contact.call_status = 'pending'  # بازگشت به حالت در انتظار
+            contact.save()
+
+            return Response(
+                {"detail": "مخاطب با موفقیت آزاد شد و به لیست عمومی بازگشت."},
+                status=status.HTTP_200_OK
+            )
+        else:
+            return Response(
+                {"detail": "شما اجازه آزاد کردن این مخاطب را ندارید."},
+                status=status.HTTP_403_FORBIDDEN
+            )
+
+    @action(detail=True, methods=["post"], url_path="remove-assigned-caller")
+    def remove_assigned_caller(self, request, pk=None):
+        """
+        حذف تماس‌گیرنده تخصیص‌یافته از یک مخاطب. فقط ادمین پروژه می‌تواند.
+        """
+        contact = self.get_object()
+
+        # فقط ادمین پروژه می‌تواند این کار را انجام دهد
+        if not (request.user.is_superuser or ProjectMembership.objects.filter(
+                project=contact.project,
+                user=request.user,
+                role='admin'
+        ).exists()):
+            return Response(
+                {"detail": "فقط ادمین پروژه می‌تواند تماس‌گیرنده را حذف کند."},
+                status=status.HTTP_403_FORBIDDEN
+            )
+
+        contact.assigned_caller = None
+        contact.call_status = 'pending'
+        contact.save()
+
+        return Response(
+            {"detail": "تماس‌گیرنده از مخاطب حذف شد."},
+            status=status.HTTP_200_OK
+        )
+
+    @action(detail=True, methods=["post"], url_path="submit-call")
+    def submit_call(self, request, pk=None):
+        """
+        ثبت یک تماس جدید برای یک مخاطب
+        """
+        contact = self.get_object()
+
+        # بررسی دسترسی
+        if not (contact.assigned_caller == request.user or
+                ProjectMembership.objects.filter(
+                    project=contact.project, user=request.user, role='admin'
+                ).exists() or request.user.is_superuser):
+            return Response(
+                {"detail": "شما اجازه ثبت تماس برای این مخاطب را ندارید."},
+                status=status.HTTP_403_FORBIDDEN
+            )
+
+        serializer = CallSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+
+        # ثبت تماس
+        call = serializer.save(
+            caller=request.user,
+            contact=contact,
+            project=contact.project
+        )
+
+        # به‌روزرسانی وضعیت مخاطب
+        call_result = serializer.validated_data.get('call_result')
+        status_map = {
+            'answered': 'contacted',
+            'callback_requested': 'follow_up',
+            'not_interested': 'not_interested',
+            'wrong_number': 'not_interested',
+        }
+
+        contact.call_status = status_map.get(call_result, contact.call_status)
+        contact.last_call_date = call.call_date
+        contact.save()
+
+        return Response(CallSerializer(call).data, status=status.HTTP_201_CREATED)
 
     @action(detail=False, methods=['get'], url_path="pending_in_project/(?P<project_id>\d+)")
     def pending_contacts_in_project(self, request, project_id=None):
         """
-        مخاطبین در انتظار تماس کاربر لاگین کرده در یک پروژه خاص.
+        مخاطبین در انتظار تماس کاربر در یک پروژه خاص
         """
         user = request.user
         pending_contacts = self.get_queryset().filter(
@@ -192,80 +1067,6 @@ class ContactViewSet(viewsets.ModelViewSet):
         )
         serializer = self.get_serializer(pending_contacts, many=True)
         return Response(serializer.data)
-
-    @action(detail=True, methods=["post"], url_path="remove-assigned-caller")
-    def remove_assigned_caller(self, request, pk=None):
-        """
-        حذف تماس‌گیرنده تخصیص‌یافته از یک مخاطب. فقط ادمین پروژه می‌تواند.
-        """
-        contact = self.get_object()
-        # فقط ادمین پروژه می‌تواند این کار را انجام دهد
-        if not (request.user.is_superuser or ProjectMembership.objects.filter(project=contact.project,
-                                                                              user=request.user,
-                                                                              role='admin').exists()):
-            return Response({"detail": "فقط ادمین پروژه می‌تواند تماس‌گیرنده را حذف کند."},
-                            status=status.HTTP_403_FORBIDDEN)
-
-        contact.assigned_caller = None
-        contact.save()
-        return Response({"detail": "تماس‌گیرنده از مخاطب حذف شد."}, status=status.HTTP_200_OK)
-
-    @action(detail=True, methods=["post"], url_path="submit-call")
-    def submit_call(self, request, pk=None):
-        """
-        ثبت یک تماس جدید برای یک مخاطب. جایگزین submit_call_feedback.
-        """
-        contact = self.get_object()
-        serializer = CallSerializer(data=request.data)
-        serializer.is_valid(raise_exception=True)
-
-        # اطمینان از اینکه تماس برای مخاطب و پروژه صحیح ثبت می‌شود
-        call = serializer.save(
-            caller=request.user,
-            contact=contact,
-            project=contact.project
-        )
-
-        # به‌روزرسانی وضعیت مخاطب بر اساس نتیجه تماس
-        call_result = serializer.validated_data.get('call_result')
-        status_map = {
-            'answered': 'contacted',
-            'callback_requested': 'follow_up',
-            'not_interested': 'not_interested',
-            'wrong_number': 'not_interested',
-        }
-        contact.call_status = status_map.get(call_result, contact.call_status)  # اگر نتیجه‌ای نبود، وضعیت قبلی حفظ شود
-        contact.last_call_date = call.call_date
-        contact.save()
-
-        return Response(CallSerializer(call).data, status=status.HTTP_201_CREATED)
-
-    @action(detail=True, methods=['post'], url_path='release')
-    def release_contact(self, request, pk=None):
-        """
-        یک تماس‌گیرنده می‌تواند مخاطب تخصیص داده شده به خودش را آزاد کند.
-        این کار باعث می‌شود assigned_caller برابر null شود.
-        """
-        contact = self.get_object()
-        user = request.user
-
-        # بررسی دسترسی: کاربر باید ادمین پروژه باشد یا همان تماس‌گیرنده‌ای باشد که مخاطب به او تخصیص یافته.
-        is_admin = ProjectMembership.objects.filter(project=contact.project, user=user, role='admin').exists()
-        print(contact.full_name)
-
-        if contact.assigned_caller == user or is_admin or user.is_superuser:
-            contact.assigned_caller = None
-            contact.save()
-            print(contact.assigned_caller)
-            return Response({"detail": "مخاطب با موفقیت آزاد شد و به لیست عمومی بازگشت."}, status=status.HTTP_200_OK)
-        else:
-            return Response(
-                {"detail": "شما اجازه آزاد کردن این مخاطب را ندارید زیرا به شما تخصیص داده نشده است."},
-                status=status.HTTP_403_FORBIDDEN
-            )
-    # اکشن‌های request_new_call, call_statistics, last_call از کد قبلی کامل و درست بودند.
-    # ... (این اکشن‌ها را اینجا اضافه کنید)
-
 
 class CallViewSet(viewsets.ModelViewSet):
     queryset = Call.objects.all()
@@ -282,6 +1083,36 @@ class CallViewSet(viewsets.ModelViewSet):
     def perform_create(self, serializer):
         serializer.save(caller=self.request.user)
 
+    @action(detail=False, methods=["post"], permission_classes=[IsAuthenticated])
+    def submit_call(self, request):
+        """
+        ایجاد یک تماس جدید با بازخورد
+        """
+        contact_id = request.data.get('callecaller_id') or request.data.get('contact_id')
+        project_id = request.data.get('project_id')
+
+        if not contact_id:
+            return Response({"error": "contact_id الزامی است"}, status=400)
+
+        try:
+            contact = Contact.objects.get(id=contact_id)
+            project = Project.objects.get(id=project_id) if project_id else None
+        except (Contact.DoesNotExist, Project.DoesNotExist):
+            return Response({"error": "Contact یا Project یافت نشد"}, status=404)
+
+        call = Call.objects.create(
+            contact=contact,
+            caller=request.user,
+            project=project,
+            status=request.data.get('status', 'completed'),
+            call_result=request.data.get('call_result'),
+            notes=request.data.get('notes', ''),
+            duration=request.data.get('duration', 0),
+            follow_up_required=request.data.get('call_result') == 'callback_requested',
+            follow_up_date=request.data.get('follow_up_date'),
+        )
+
+        return Response(CallSerializer(call).data, status=201)
     @action(detail=True, methods=["post"], permission_classes=[IsAuthenticated])
     def edit_call(self, request, pk=None):
         call = self.get_object()
@@ -475,3 +1306,126 @@ class CachedStatisticsViewSet(viewsets.ReadOnlyModelViewSet):
     queryset = CachedStatistics.objects.all()
     serializer_class = CachedStatisticsSerializer
     permission_classes = [IsAdminUser]
+
+
+def assign_contacts_randomly(project, contacts_list):
+    """
+    تخصیص تصادفی مخاطبین به تماس‌گیرندگان پروژه
+    """
+    project_callers = list(ProjectMembership.objects.filter(
+        project=project, role='caller'
+    ).values_list('user_id', flat=True))
+
+    if not project_callers:
+        return False
+
+    import random
+    for contact in contacts_list:
+        if not contact.assigned_caller:
+            random_caller_id = random.choice(project_callers)
+            contact.assigned_caller_id = random_caller_id
+            contact.save()
+
+    return True
+
+
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def admin_dashboard_data(request):
+    if not request.user.is_staff:
+        return Response({'error': 'Access denied'}, status=403)
+    print
+    start_date = request.data.get('start_date')  # میلادی: "2025-03-14"
+    end_date = request.data.get('end_date')  # میلادی: "2025-03-21"
+    print(start_date)
+    print(end_date)
+    # فیلتر تاریخی
+    calls_qs = Call.objects.all()
+    if start_date:
+        calls_qs = calls_qs.filter(call_date__gte=start_date)
+    if end_date:
+        calls_qs = calls_qs.filter(call_date__lte=end_date)
+
+    # 1. Overview Statistics
+    total_projects = Project.objects.filter(status='active').count()
+    total_calls = calls_qs.count()
+    total_callers = CustomUser.objects.filter(
+        projectmembership__role='caller'
+    ).distinct().count()
+
+    successful_calls = calls_qs.filter(call_result='answered').count()
+    success_rate = (successful_calls / total_calls * 100) if total_calls > 0 else 0
+
+    # 2. Project Statistics
+    project_stats = []
+    projects = Project.objects.filter(status='active')
+    for project in projects:
+        project_calls = calls_qs.filter(project=project)
+        total_calls_proj = project_calls.count()
+        successful_calls_proj = project_calls.filter(call_result='answered').count()
+
+        project_stats.append({
+            'name': project.name,
+            'total_calls': total_calls_proj,
+            'successful_calls': successful_calls_proj
+        })
+
+    # 3. Call Status Distribution
+    call_status_distribution = []
+    status_counts = calls_qs.values('call_result').annotate(count=Count('id'))
+
+    status_mapping = {
+        'answered': 'موفق',
+        'no_answer': 'ناموفق',
+        'busy': 'مشغول',
+        'unreachable': 'در دسترس نیست',
+        'wrong_number': 'خطا'
+    }
+
+    for status in status_counts:
+        call_status_distribution.append({
+            'name': status_mapping.get(status['call_result'], status['call_result']),
+            'value': status['count']
+        })
+
+    # 4. Call Trends
+    call_trends = calls_qs.extra(
+        select={'date': 'DATE(call_date)'}
+    ).values('date').annotate(
+        calls=Count('id'),
+        successful=Count('id', filter=Q(call_result='answered'))
+    ).order_by('date')
+
+    # 5. Caller Performance
+    caller_performance = []
+    callers = CustomUser.objects.filter(projectmembership__role='caller').distinct()
+
+    for caller in callers:
+        caller_calls = calls_qs.filter(caller=caller)
+        total_calls_caller = caller_calls.count()
+        successful_calls_caller = caller_calls.filter(call_result='answered').count()
+        avg_duration = caller_calls.aggregate(Avg('duration'))['duration__avg'] or 0
+        success_rate_caller = (successful_calls_caller / total_calls_caller * 100) if total_calls_caller > 0 else 0
+
+        caller_performance.append({
+            'name': caller.get_full_name() or caller.username,
+            'total_calls': total_calls_caller,
+            'successful_calls': successful_calls_caller,
+            'success_rate': round(success_rate_caller, 1),
+            'avg_duration': round(avg_duration / 60, 1) if avg_duration else 0  # دقیقه
+        })
+
+    return Response({
+        'success': True,
+        'data': {
+            'total_projects': total_projects,
+            'total_calls': total_calls,
+            'total_callers': total_callers,
+            'success_rate': round(success_rate, 1),
+            'projectStats': project_stats,
+            "projectLength":len(project_stats),
+            'callStatusDistribution': call_status_distribution,
+            'callTrends': list(call_trends),
+            'callerPerformance': caller_performance
+        }
+    })
