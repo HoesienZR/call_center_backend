@@ -1,3 +1,7 @@
+from random import random
+
+import numpy as np
+import pandas as pd
 from django.db.models import Count, Avg, Q
 from rest_framework import viewsets, status
 from rest_framework.response import Response
@@ -7,9 +11,9 @@ from rest_framework.decorators import action
 from django.db import transaction
 from datetime import datetime
 from .permission import  IsProjectCaller, IsProjectAdmin, IsProjectAdminOrCaller, IsReadOnlyOrProjectAdmin
-
+from .models import CustomUser as User
 import logging
-
+import random
 from django.db import connections
 from django.http import HttpResponse
 
@@ -64,6 +68,43 @@ class UserViewSet(viewsets.ReadOnlyModelViewSet):
         """
         serializer = self.get_serializer(request.user)
         return Response(serializer.data)
+
+
+def safe_dict_conversion(row):
+    """
+    تبدیل ایمن pandas Series به dictionary با جلوگیری از مقادیر NaN
+    """
+    try:
+        if hasattr(row, 'to_dict'):
+            row_dict = row.to_dict()
+            # تبدیل همه مقادیر NaN به رشته خالی
+            for key, value in row_dict.items():
+                if pd.isna(value) or (isinstance(value, float) and np.isnan(value)):
+                    row_dict[key] = ''
+                else:
+                    row_dict[key] = str(value)
+            return row_dict
+        else:
+            return str(row)
+    except Exception:
+        return "خطا در تبدیل داده"
+
+
+def clean_string_field(value):
+    """
+    تمیز کردن و اعتبارسنجی فیلدهای رشته‌ای
+    """
+    if pd.isna(value) or value is None:
+        return ''
+
+    # تبدیل به رشته
+    str_value = str(value).strip()
+
+    # حذف مقادیر نامعتبر
+    if str_value.lower() in ['nan', 'none', 'null', '']:
+        return ''
+
+    return str_value
 
 
 class ProjectViewSet(viewsets.ModelViewSet):
@@ -724,12 +765,20 @@ class ContactViewSet(viewsets.ModelViewSet):
             }, status=status.HTTP_400_BAD_REQUEST)
 
         try:
-            import pandas as pd
-            import random
-
-            # خواندن فایل اکسل
+            # خواندن فایل اکسل با تنظیمات ویژه برای جلوگیری از NaN
             try:
-                df = pd.read_excel(file)
+                df = pd.read_excel(file, na_values=['', ' ', 'NA', 'N/A', 'null'])
+
+                # جایگزینی همه مقادیر NaN با رشته خالی
+                df = df.fillna('')
+
+                # تبدیل تمام ستون‌ها به رشته برای جلوگیری از مشکلات نوع داده
+                df = df.astype(str)
+
+                # تمیز کردن مقادیر 'nan' string که ممکن است ایجاد شده باشد
+                df = df.replace('nan', '')
+                df = df.replace('None', '')
+
             except Exception as e:
                 return Response({
                     "error": f"خطا در خواندن فایل اکسل: {str(e)}"
@@ -737,7 +786,7 @@ class ContactViewSet(viewsets.ModelViewSet):
 
             # بررسی وجود ستون‌های ضروری
             required_columns = ['phone']
-            optional_columns = ['full_name', 'email', 'address', 'custom_fields']  # افزودن custom_fields
+            optional_columns = ['full_name', 'email', 'address', 'custom_fields']
 
             missing_columns = [col for col in required_columns if col not in df.columns]
             if missing_columns:
@@ -775,17 +824,29 @@ class ContactViewSet(viewsets.ModelViewSet):
 
                 for index, row in df.iterrows():
                     try:
-                        # تمیز کردن داده‌ها
-                        phone = clean_string_field(str(row.get('phone', '')))
-                        full_name = clean_string_field(str(row.get('full_name', '')))
-                        email = clean_string_field(str(row.get('email', '')))
-                        address = clean_string_field(str(row.get('address', '')))
-                        custom_fields = clean_string_field(str(row.get('custom_fields', '')))  # افزودن custom_fields
+                        # تمیز کردن داده‌ها و جلوگیری از مقادیر NaN
+                        phone = clean_string_field(str(row.get('phone', '')).strip())
+                        full_name = clean_string_field(str(row.get('full_name', '')).strip())
+                        email = clean_string_field(str(row.get('email', '')).strip())
+                        address = clean_string_field(str(row.get('address', '')).strip())
+                        custom_fields = clean_string_field(str(row.get('custom_fields', '')).strip())
+
+                        # اطمینان از اینکه مقادیر 'nan' string تبدیل به رشته خالی شوند
+                        if phone.lower() == 'nan':
+                            phone = ''
+                        if full_name.lower() == 'nan':
+                            full_name = ''
+                        if email.lower() == 'nan':
+                            email = ''
+                        if address.lower() == 'nan':
+                            address = ''
+                        if custom_fields.lower() == 'nan':
+                            custom_fields = ''
 
                         if not phone:
                             failed_contacts.append({
                                 'row': index + 2,
-                                'data': row.to_dict(),
+                                'data': safe_dict_conversion(row),
                                 'error': 'شماره تلفن الزامی است'
                             })
                             continue
@@ -795,7 +856,7 @@ class ContactViewSet(viewsets.ModelViewSet):
                         if not validate_phone_number(normalized_phone):
                             failed_contacts.append({
                                 'row': index + 2,
-                                'data': row.to_dict(),
+                                'data': safe_dict_conversion(row),
                                 'error': 'شماره تلفن نامعتبر است'
                             })
                             continue
@@ -815,7 +876,7 @@ class ContactViewSet(viewsets.ModelViewSet):
                             existing_contact.full_name = full_name
                             existing_contact.email = email if email and '@' in email else existing_contact.email
                             existing_contact.address = address or existing_contact.address
-                            existing_contact.custom_fields = custom_fields or existing_contact.custom_fields  # به‌روزرسانی custom_fields
+                            existing_contact.custom_fields = custom_fields or existing_contact.custom_fields
                             existing_contact.is_active = True
 
                             if not existing_contact.assigned_caller:
@@ -829,7 +890,7 @@ class ContactViewSet(viewsets.ModelViewSet):
                                 'full_name': existing_contact.full_name,
                                 'phone': existing_contact.phone,
                                 'assigned_caller': existing_contact.assigned_caller.get_full_name() if existing_contact.assigned_caller else None,
-                                'custom_fields': existing_contact.custom_fields,  # افزودن custom_fields
+                                'custom_fields': existing_contact.custom_fields,
                                 'action': 'updated'
                             })
                         else:
@@ -842,7 +903,7 @@ class ContactViewSet(viewsets.ModelViewSet):
                                 phone=normalized_phone,
                                 email=email if email and '@' in email else '',
                                 address=address or '',
-                                custom_fields=custom_fields or '',  # افزودن custom_fields
+                                custom_fields=custom_fields or '',
                                 assigned_caller=random_caller.user,
                                 call_status='pending',
                                 created_by=request.user
@@ -854,18 +915,18 @@ class ContactViewSet(viewsets.ModelViewSet):
                                 'phone': new_contact.phone,
                                 'assigned_caller': new_contact.assigned_caller.get_full_name(),
                                 'assigned_caller_id': new_contact.assigned_caller.id,
-                                'custom_fields': new_contact.custom_fields,  # افزودن custom_fields
+                                'custom_fields': new_contact.custom_fields,
                                 'action': 'created'
                             })
 
                     except Exception as e:
                         failed_contacts.append({
                             'row': index + 2,
-                            'data': row.to_dict() if hasattr(row, 'to_dict') else str(row),
+                            'data': safe_dict_conversion(row),
                             'error': str(e)
                         })
 
-            # آماده کردن پاسخ
+            # آماده کردن پاسخ با تبدیل ایمن به JSON
             response_data = {
                 'message': 'فایل مخاطبین با موفقیت پردازش شد',
                 'file_id': uploaded_file.id,
@@ -935,7 +996,7 @@ class ContactViewSet(viewsets.ModelViewSet):
                 call_status='pending',
                 is_active=True
             ).first()
-            print(available_contact)
+
             if available_contact:
                 # تخصیص مخاطب به کاربر فعلی
                 available_contact.assigned_caller = request.user
@@ -1068,6 +1129,128 @@ class ContactViewSet(viewsets.ModelViewSet):
         serializer = self.get_serializer(pending_contacts, many=True)
         return Response(serializer.data)
 
+    @action(detail=False, methods=['get'], url_path='statistics')
+    def get_statistics(self, request):
+        """
+        آمارهای کلی مخاطبین
+        """
+        project_id = request.query_params.get('project_id')
+        user = request.user
+
+        if project_id:
+            try:
+                project = Project.objects.get(id=project_id)
+                # بررسی دسترسی
+                if not (user.is_superuser or ProjectMembership.objects.filter(
+                        project=project, user=user
+                ).exists()):
+                    return Response(
+                        {"detail": "شما به این پروژه دسترسی ندارید."},
+                        status=status.HTTP_403_FORBIDDEN
+                    )
+
+                base_queryset = Contact.objects.filter(project=project)
+            except Project.DoesNotExist:
+                return Response(
+                    {"detail": "پروژه یافت نشد."},
+                    status=status.HTTP_404_NOT_FOUND
+                )
+        else:
+            # آمار کلی برای کاربر
+            base_queryset = self.get_queryset()
+
+        statistics = {
+            'total_contacts': base_queryset.count(),
+            'pending_contacts': base_queryset.filter(call_status='pending').count(),
+            'contacted': base_queryset.filter(call_status='contacted').count(),
+            'follow_up': base_queryset.filter(call_status='follow_up').count(),
+            'not_interested': base_queryset.filter(call_status='not_interested').count(),
+            'assigned_to_me': base_queryset.filter(assigned_caller=user).count() if not user.is_superuser else None,
+            'unassigned': base_queryset.filter(assigned_caller__isnull=True).count(),
+        }
+
+        return Response(statistics)
+
+    @action(detail=False, methods=['post'], url_path='bulk-assign')
+    def bulk_assign_contacts(self, request):
+        """
+        تخصیص دسته‌ای مخاطبین به تماس‌گیرندگان
+        """
+        project_id = request.data.get('project_id')
+        contact_ids = request.data.get('contact_ids', [])
+        caller_id = request.data.get('caller_id')
+
+        if not project_id or not contact_ids:
+            return Response(
+                {"error": "شناسه پروژه و لیست مخاطبین الزامی است."},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        try:
+            project = Project.objects.get(id=project_id)
+            # بررسی دسترسی ادمین
+            if not (request.user.is_superuser or ProjectMembership.objects.filter(
+                    project=project, user=request.user, role='admin'
+            ).exists()):
+                return Response(
+                    {"detail": "فقط ادمین پروژه می‌تواند مخاطبین را تخصیص دهد."},
+                    status=status.HTTP_403_FORBIDDEN
+                )
+
+            contacts = Contact.objects.filter(
+                id__in=contact_ids,
+                project=project
+            )
+
+            if caller_id:
+                # تخصیص به یک تماس‌گیرنده خاص
+                try:
+                    caller = User.objects.get(id=caller_id)
+                    # بررسی عضویت تماس‌گیرنده در پروژه
+                    if not ProjectMembership.objects.filter(
+                            project=project, user=caller, role='caller'
+                    ).exists():
+                        return Response(
+                            {"error": "تماس‌گیرنده انتخاب شده عضو این پروژه نیست."},
+                            status=status.HTTP_400_BAD_REQUEST
+                        )
+
+                    updated_count = contacts.update(assigned_caller=caller)
+
+                except User.DoesNotExist:
+                    return Response(
+                        {"error": "تماس‌گیرنده یافت نشد."},
+                        status=status.HTTP_404_NOT_FOUND
+                    )
+            else:
+                # تخصیص تصادفی
+                project_callers = list(ProjectMembership.objects.filter(
+                    project=project, role='caller'
+                ).select_related('user'))
+
+                if not project_callers:
+                    return Response(
+                        {"error": "در این پروژه هیچ تماس‌گیرنده‌ای وجود ندارد."},
+                        status=status.HTTP_400_BAD_REQUEST
+                    )
+
+                updated_count = 0
+                for contact in contacts:
+                    random_caller = random.choice(project_callers)
+                    contact.assigned_caller = random_caller.user
+                    contact.save()
+                    updated_count += 1
+
+            return Response({
+                "message": f"{updated_count} مخاطب با موفقیت تخصیص یافت.",
+                "updated_count": updated_count
+            })
+
+        except Project.DoesNotExist:
+            return Response(
+                {"error": "پروژه یافت نشد."},
+                status=status.HTTP_404_NOT_FOUND
+            )
 class CallViewSet(viewsets.ModelViewSet):
     queryset = Call.objects.all()
     serializer_class = CallSerializer

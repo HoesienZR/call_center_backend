@@ -170,11 +170,12 @@ CELERY_BEAT_SCHEDULE = {
 DATABASES = {
     'default': dj_database_url.config(default=os.environ.get("DATABASE_URL")),
 }
+
 #DATABASES = {
 #    'default': {
 #        'ENGINE': 'django.db.backends.postgresql',
 #        'NAME': 'call_center_db',
-#        'USER': 'postgres',
+#       'USER': 'postgres',
 #        'PASSWORD': '@Mirzr4848',
 #        'HOST': 'localhost',  # یا IP سرور دیتابیس
 #        'PORT': '5432',  # پورت پیش‌فرض PostgreSQL
