@@ -30,7 +30,7 @@ urlpatterns = [
     path('auth/register/', auth_views.register, name='api_register'),
     path('auth/token/', auth_views.CustomAuthToken.as_view(), name='api_token_auth'),
     path('',views.check_postgresql_connection, name='check_postgresql_connection'),
-    path('admin/dashboard/', views.admin_dashboard_data, name='admin-dashboard'),
+    path('admin/dashboard/', views.dashboard_data, name='dashboard_data'),
 ]
 
 

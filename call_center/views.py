@@ -1,14 +1,17 @@
 from random import random
-
+from django.db.models import Count, Sum, Avg
 import numpy as np
 import pandas as pd
+from django.db.models import Count, Avg, Sum, Q, F, Case, When, IntegerField, FloatField
+from django.db.models.functions import Coalesce
 from django.db.models import Count, Avg, Q
+from django.db.models.aggregates import Sum
 from rest_framework import viewsets, status
 from rest_framework.response import Response
 from rest_framework.decorators import action, api_view, permission_classes
 from rest_framework.permissions import IsAuthenticated, IsAdminUser
 from rest_framework.decorators import action
-from django.db import transaction
+from django.db import transaction, models
 from datetime import datetime
 from .permission import  IsProjectCaller, IsProjectAdmin, IsProjectAdminOrCaller, IsReadOnlyOrProjectAdmin
 from .models import CustomUser as User
@@ -1789,3 +1792,201 @@ class CallExcelViewSet(viewsets.ReadOnlyModelViewSet):
         # دریافت پروژه‌هایی که کاربر در آن‌ها نقش دارد
         project_ids = ProjectMembership.objects.filter(user=user).values_list('project_id', flat=True)
         return self.queryset.filter(project__id__in=project_ids)
+
+
+@api_view(['GET', 'POST'])
+@permission_classes([IsAuthenticated])
+def dashboard_data(request):
+    """
+    Simple dashboard data endpoint - returns raw data for client-side filtering
+    """
+    project_id = request.GET.get('project_id')
+    start_date = request.GET.get('start_date')
+    end_date = request.GET.get('end_date')
+
+    # بررسی دسترسی کاربر
+    user = request.user
+    if not (user.is_superuser or user.is_staff):
+        # محدود کردن به پروژه‌هایی که کاربر در آن‌ها ادمین است
+        admin_projects = ProjectMembership.objects.filter(
+            user=user, role='admin'
+        ).values_list('project_id', flat=True)
+
+        if not admin_projects:
+            return Response({
+                'error': 'شما اجازه دسترسی به این گزارش را ندارید'
+            }, status=status.HTTP_403_FORBIDDEN)
+
+    # شروع query اصلی
+    calls_query = Call.objects.all().select_related('caller', 'project', 'contact')
+
+    # اعمال فیلترهای تاریخی
+    if start_date:
+        calls_query = calls_query.filter(call_date__gte=start_date)
+    if end_date:
+        calls_query = calls_query.filter(call_date__lte=end_date)
+
+    # فیلتر پروژه خاص
+    if project_id:
+        calls_query = calls_query.filter(project_id=project_id)
+
+    # محدود کردن دسترسی برای کاربران غیر ادمین
+    if not (user.is_superuser or user.is_staff):
+        calls_query = calls_query.filter(project__in=admin_projects)
+
+    # Get all data without filtering - let client handle filtering
+    all_calls = Call.objects.all().select_related('contact', 'project', 'caller')
+    all_projects = Project.objects.all()
+    all_callers = CustomUser.objects.filter(projectmembership__role='caller')
+
+    intersted_calls = all_calls.filter(call_result='interested').count()
+    if all_calls.count() == 0:
+        success_rate = 0
+    else:
+        success_rate = intersted_calls / all_calls.count() * 100
+
+    # عملکرد تماس‌گیرندگان - استفاده از query بهبود یافته
+    caller_stats = calls_query.values(
+        'caller__id',
+        'caller__username',
+        'caller__first_name',
+        'caller__last_name',
+        'caller__phone_number'
+    ).annotate(
+        # تعداد کل تماس‌ها
+        total_calls=Count('id'),
+
+        # تماس‌های پاسخ داده شده (status='answered')
+        answered_calls=Count(
+            Case(
+                When(status='answered', then=1),
+                output_field=IntegerField()
+            )
+        ),
+
+        # تماس‌های موفق (call_result='interested')
+        successful_calls=Count(
+            Case(
+                When(call_result='interested', then=1),
+                output_field=IntegerField()
+            )
+        ),
+
+        # مجموع مدت تماس‌ها (به ثانیه)
+        total_duration_seconds=Coalesce(Sum('duration'), 0),
+
+        # میانگین مدت تماس (فقط برای تماس‌های پاسخ داده شده)
+        avg_call_duration_seconds=Coalesce(
+            Avg('duration', filter=Q(status='answered')), 0.0
+        ),
+
+        # تعداد پروژه‌های مختلف که در آن‌ها تماس گرفته
+        project_count=Count('project', distinct=True)
+
+    ).annotate(
+        # نرخ پاسخ‌دهی (درصد تماس‌هایی که پاسخ داده شد)
+        response_rate=Case(
+            When(total_calls=0, then=0.0),
+            default=F('answered_calls') * 100.0 / F('total_calls'),
+            output_field=FloatField()
+        ),
+
+        # نرخ موفقیت (درصد تماس‌های موفق از کل تماس‌ها)
+        success_rate=Case(
+            When(total_calls=0, then=0.0),
+            default=F('successful_calls') * 100.0 / F('total_calls'),
+            output_field=FloatField()
+        ),
+
+        # نرخ تبدیل (درصد تماس‌های موفق از تماس‌های پاسخ داده شده)
+        conversion_rate=Case(
+            When(answered_calls=0, then=0.0),
+            default=F('successful_calls') * 100.0 / F('answered_calls'),
+            output_field=FloatField()
+        )
+    ).order_by('-total_calls')
+
+    # تبدیل نتایج به فرمت مطلوب
+    caller_performance_data = []
+
+    for caller in caller_stats:
+        # ساخت نام کامل
+        full_name = f"{caller['caller__first_name'] or ''} {caller['caller__last_name'] or ''}".strip()
+        if not full_name:
+            full_name = caller['caller__username']
+
+        # تبدیل ثانیه به دقیقه:ثانیه برای نمایش بهتر
+        total_minutes = int(caller['total_duration_seconds'] // 60)
+        total_seconds = int(caller['total_duration_seconds'] % 60)
+
+        avg_minutes = int(caller['avg_call_duration_seconds'] // 60)
+        avg_seconds_remainder = int(caller['avg_call_duration_seconds'] % 60)
+
+        caller_performance_data.append({
+            'caller_id': caller['caller__id'],
+            'name': full_name,
+            'username': caller['caller__username'],
+            'phone_number': caller['caller__phone_number'],
+            'total_calls': caller['total_calls'],
+            'answered_calls': caller['answered_calls'],
+            'successful_calls': caller['successful_calls'],
+            'response_rate': round(caller['response_rate'], 2),
+            'success_rate': round(caller['success_rate'], 2),
+            'conversion_rate': round(caller['conversion_rate'], 2),
+            'avg_call_duration_formatted': f"{avg_minutes}:{avg_seconds_remainder:02d}",
+            'avg_call_duration_seconds': round(caller['avg_call_duration_seconds'], 2),
+            'total_duration_formatted': f"{total_minutes}:{total_seconds:02d}",
+            'total_duration_seconds': caller['total_duration_seconds'],
+            'project_count': caller['project_count'],
+            # برای سازگاری با کد قبلی
+            'total_calls_all_projects': caller['total_calls'],
+            'total_successful_calls_all_projects': caller['successful_calls'],
+            'total_answered_calls_all_projects': caller['answered_calls'],
+            'total_duration_all_projects': caller['total_duration_seconds'],
+            'overall_response_rate': round(caller['response_rate'], 2),
+            'overall_success_rate': round(caller['success_rate'], 2),
+            'overall_conversion_rate': round(caller['conversion_rate'], 2),
+            'overall_avg_duration': round(caller['avg_call_duration_seconds'], 2)
+        })
+
+    # Basic stats
+    dashboard_data_response = {
+        'total_projects': all_projects.count(),
+        'total_calls': all_calls.count(),
+        'total_callers': all_callers.count(),
+        'success_rate': success_rate,
+
+        # Project stats - raw data
+        'projectStats': [
+            {
+                'id': project.id,
+                'name': project.name,
+                'total_calls': project.calls.count(),
+                'successful_calls': project.calls.filter(call_result='interested').count()
+            }
+            for project in all_projects
+        ],
+
+        # Call status distribution - raw counts
+        'callStatusDistribution': [
+            {'name': 'interested', 'count': all_calls.filter(call_result='interested').count()},
+            {'name': 'not_interested', 'count': all_calls.filter(call_result='not_interested').count()},
+            {'name': 'no_time', 'count': all_calls.filter(call_result='no_time').count()},
+        ],
+
+        # Call trends - raw data by date
+        'callTrends': list(
+            all_calls.extra(select={'date': 'DATE(call_date)'})
+            .values('date')
+            .annotate(
+                calls=Count('id'),
+                successful=Count('id', filter=Q(call_result='interested'))
+            )
+            .order_by('date')
+        ),
+
+        # Caller performance - بر اساس query جدید
+        'callerPerformance': caller_performance_data
+    }
+
+    return Response(dashboard_data_response)
