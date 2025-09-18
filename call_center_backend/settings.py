@@ -65,11 +65,13 @@ INSTALLED_APPS = [
     'corsheaders',
     'call_center',
     'django_celery_beat',
+    "silk",
 
 ]
 USE_TZ = True
 
 MIDDLEWARE = [
+    "silk.middleware.SilkyMiddleware",
     'django.middleware.security.SecurityMiddleware',
     'corsheaders.middleware.CorsMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
@@ -78,6 +80,7 @@ MIDDLEWARE = [
     'django.contrib.auth.middleware.AuthenticationMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
+
 ]
 
 ROOT_URLCONF = 'call_center_backend.urls'
@@ -167,16 +170,16 @@ CELERY_BEAT_SCHEDULE = {
 # other codes ...
 
 
-DATABASES = {
-    'default': dj_database_url.config(default=os.environ.get("DATABASE_URL")),
-}
+#DATABASES = {
+#  'default': dj_database_url.config(default=os.environ.get("DATABASE_URL")),
+#}
 
 #DATABASES = {
-#    'default': {
-#        'ENGINE': 'django.db.backends.postgresql',
-#        'NAME': 'call_center_db',
-#       'USER': 'postgres',
-#        'PASSWORD': '@Mirzr4848',
+  #  'default': {
+ #       'ENGINE': 'django.db.backends.postgresql',
+ #       'NAME': 'call_center_db',
+ #      'USER': 'postgres',
+ #       'PASSWORD': '@Mirzr4848',
 #        'HOST': 'localhost',  # یا IP سرور دیتابیس
 #        'PORT': '5432',  # پورت پیش‌فرض PostgreSQL
 #        }

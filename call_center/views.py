@@ -25,7 +25,7 @@ from .serializers import (
     CustomUserSerializer, ProjectSerializer, ContactSerializer,
     CallSerializer, CallEditHistorySerializer, CallStatisticsSerializer,
     SavedSearchSerializer, UploadedFileSerializer, ExportReportSerializer, CachedStatisticsSerializer,
-    CustomUserSerializer
+    CustomUserSerializer,CallExcelSerializer
 )
 from .utils import (
     validate_phone_number, normalize_phone_number, generate_secure_password,
@@ -186,6 +186,156 @@ class ProjectViewSet(viewsets.ModelViewSet):
                     'detail': 'شما عضو این پروژه نیستید'
                 }, status=status.HTTP_403_FORBIDDEN)
 
+    @action(detail=True, methods=['get'], url_path='export-caller-performance',
+            permission_classes=[IsAuthenticated, IsProjectAdmin])
+    def export_caller_performance(self, request, pk=None):
+        """
+        خروجی اکسل از گزارش عملکرد تماس‌گیرندگان پروژه
+        GET /api/projects/{project_id}/export-caller-performance/
+        """
+        project = self.get_object()
+
+        try:
+            # دریافت گزارش عملکرد تماس‌گیرندگان
+            caller_performance = project.get_caller_performance_report()
+
+            if not caller_performance:
+                return Response({
+                    'error': 'هیچ تماس‌گیرنده‌ای برای این پروژه یافت نشد'
+                }, status=status.HTTP_404_NOT_FOUND)
+
+            import pandas as pd
+            from io import BytesIO
+            from django.http import HttpResponse
+            import jdatetime
+
+            # تبدیل داده‌ها به DataFrame
+            df_data = []
+            for caller in caller_performance:
+                # تبدیل ثانیه به دقیقه و ثانیه برای نمایش بهتر
+                total_minutes = int(caller['total_duration_seconds'] // 60)
+                total_seconds = int(caller['total_duration_seconds'] % 60)
+                avg_minutes = int(caller['average_call_duration_seconds'] // 60)
+                avg_seconds = int(caller['average_call_duration_seconds'] % 60)
+
+                df_data.append({
+                    'شناسه تماس‌گیرنده': caller['caller_id'],
+                    'نام کاربری': caller['caller_username'],
+                    'نام کامل': caller['caller_full_name'],
+                    'تعداد کل تماس‌ها': caller['total_calls'],
+                    'تماس‌های پاسخ داده شده': caller['answered_calls'],
+                    'نرخ موفقیت (درصد)': f"{caller['success_rate']}%",
+                    'مدت کل تماس‌ها (دقیقه:ثانیه)': f"{total_minutes}:{total_seconds:02d}",
+                    'میانگین مدت تماس (دقیقه:ثانیه)': f"{avg_minutes}:{avg_seconds:02d}",
+                    'مدت کل تماس‌ها (ثانیه)': caller['total_duration_seconds'],
+                    'میانگین مدت تماس (ثانیه)': caller['average_call_duration_seconds']
+                })
+
+            df = pd.DataFrame(df_data)
+
+            # ایجاد فایل اکسل در حافظه
+            output = BytesIO()
+
+            # استفاده از xlsxwriter برای کنترل بیشتر روی فرمت
+            with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
+                df.to_excel(writer, sheet_name='گزارش عملکرد تماس‌گیرندگان', index=False)
+
+                # دریافت workbook و worksheet برای فرمت‌بندی
+                workbook = writer.book
+                worksheet = writer.sheets['گزارش عملکرد تماس‌گیرندگان']
+
+                # تنظیم فرمت هدرها
+                header_format = workbook.add_format({
+                    'bold': True,
+                    'text_wrap': True,
+                    'valign': 'top',
+                    'fg_color': '#D7E4BC',
+                    'border': 1
+                })
+
+                # تنظیم فرمت سلول‌های عادی
+                cell_format = workbook.add_format({
+                    'text_wrap': True,
+                    'valign': 'top',
+                    'border': 1
+                })
+
+                # فرمت برای اعداد درصد
+                percent_format = workbook.add_format({
+                    'text_wrap': True,
+                    'valign': 'top',
+                    'border': 1,
+                    'fg_color': '#E8F4FD'
+                })
+
+                # اعمال فرمت به هدرها
+                for col_num, value in enumerate(df.columns.values):
+                    worksheet.write(0, col_num, value, header_format)
+
+                # تنظیم عرض ستون‌ها
+                worksheet.set_column('A:A', 12)  # شناسه تماس‌گیرنده
+                worksheet.set_column('B:B', 15)  # نام کاربری
+                worksheet.set_column('C:C', 20)  # نام کامل
+                worksheet.set_column('D:D', 12)  # تعداد کل تماس‌ها
+                worksheet.set_column('E:E', 18)  # تماس‌های پاسخ داده شده
+                worksheet.set_column('F:F', 15)  # نرخ موفقیت
+                worksheet.set_column('G:G', 20)  # مدت کل تماس‌ها
+                worksheet.set_column('H:H', 25)  # میانگین مدت تماس
+                worksheet.set_column('I:I', 20)  # مدت کل (ثانیه)
+                worksheet.set_column('J:J', 25)  # میانگین (ثانیه)
+
+                # اعمال فرمت به سلول‌ها
+                for row_num in range(1, len(df) + 1):
+                    for col_num in range(len(df.columns)):
+                        if col_num == 5:  # ستون نرخ موفقیت
+                            worksheet.write(row_num, col_num, df.iloc[row_num - 1, col_num], percent_format)
+                        else:
+                            worksheet.write(row_num, col_num, df.iloc[row_num - 1, col_num], cell_format)
+
+                # اضافه کردن اطلاعات پروژه در بالای فایل
+                worksheet.insert_rows(0, 3)
+
+                # فرمت برای اطلاعات پروژه
+                project_info_format = workbook.add_format({
+                    'bold': True,
+                    'font_size': 12,
+                    'fg_color': '#4F81BD',
+                    'font_color': 'white'
+                })
+
+                # تاریخ فعلی
+                current_date = jdatetime.datetime.now().strftime('%Y/%m/%d - %H:%M')
+
+                worksheet.write('A1', f'گزارش عملکرد تماس‌گیرندگان پروژه: {project.name}', project_info_format)
+                worksheet.write('A2', f'تاریخ تهیه گزارش: {current_date}', project_info_format)
+                worksheet.write('A3', f'تعداد کل تماس‌گیرندگان: {len(caller_performance)}', project_info_format)
+
+                # ادغام سلول‌ها برای اطلاعات پروژه
+                worksheet.merge_range('A1:J1', f'گزارش عملکرد تماس‌گیرندگان پروژه: {project.name}', project_info_format)
+                worksheet.merge_range('A2:J2', f'تاریخ تهیه گزارش: {current_date}', project_info_format)
+                worksheet.merge_range('A3:J3', f'تعداد کل تماس‌گیرندگان: {len(caller_performance)}',
+                                      project_info_format)
+
+            output.seek(0)
+
+            # تنظیم نام فایل با تاریخ
+            persian_date = jdatetime.datetime.now().strftime('%Y%m%d_%H%M%S')
+            filename = f"گزارش_عملکرد_تماس_گیرندگان_{project.name}_{persian_date}.xlsx"
+
+            # ایجاد پاسخ HTTP با فایل اکسل
+            response = HttpResponse(
+                output.getvalue(),
+                content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+            )
+            response['Content-Disposition'] = f'attachment; filename="{filename}"'
+
+            return response
+
+        except Exception as e:
+            logger.error(f"خطا در ایجاد فایل اکسل گزارش عملکرد: {str(e)}")
+            return Response({
+                'error': f'خطا در ایجاد فایل اکسل: {str(e)}'
+            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
     @action(detail=False, methods=['post'], url_path='check-user-role',
             permission_classes=[IsAuthenticated])
     def check_user_role(self, request):
@@ -1517,11 +1667,8 @@ def assign_contacts_randomly(project, contacts_list):
 def admin_dashboard_data(request):
     if not request.user.is_staff:
         return Response({'error': 'Access denied'}, status=403)
-    print
     start_date = request.data.get('start_date')  # میلادی: "2025-03-14"
     end_date = request.data.get('end_date')  # میلادی: "2025-03-21"
-    print(start_date)
-    print(end_date)
     # فیلتر تاریخی
     calls_qs = Call.objects.all()
     if start_date:
@@ -1535,9 +1682,9 @@ def admin_dashboard_data(request):
     total_callers = CustomUser.objects.filter(
         projectmembership__role='caller'
     ).distinct().count()
-
-    successful_calls = calls_qs.filter(call_result='answered').count()
+    successful_calls = calls_qs.filter(status='answered').count()
     success_rate = (successful_calls / total_calls * 100) if total_calls > 0 else 0
+
 
     # 2. Project Statistics
     project_stats = []
@@ -1545,7 +1692,8 @@ def admin_dashboard_data(request):
     for project in projects:
         project_calls = calls_qs.filter(project=project)
         total_calls_proj = project_calls.count()
-        successful_calls_proj = project_calls.filter(call_result='answered').count()
+        print( project_calls.filter(status='answered'))
+        successful_calls_proj = project_calls.filter(status='answered').count()
 
         project_stats.append({
             'name': project.name,
@@ -1570,7 +1718,15 @@ def admin_dashboard_data(request):
             'name': status_mapping.get(status['call_result'], status['call_result']),
             'value': status['count']
         })
-
+    total_no_time_count = call_status_distribution[0]['value']
+    total_not_intrested_count = call_status_distribution[1]['value']
+    total_intrested_count = call_status_distribution[2]['value']
+    no_time_rate = (total_no_time_count / total_calls) * 100 if total_calls > 0 else 0
+    not_intrested_rate = (total_not_intrested_count / total_calls) * 100 if total_calls > 0 else 0
+    intersted_rate = (total_intrested_count / total_calls) * 100 if total_calls > 0 else 0
+    call_status_distribution[0]['value'] =  no_time_rate
+    call_status_distribution[1]['value'] = not_intrested_rate
+    call_status_distribution[2]['value'] = intersted_rate
     # 4. Call Trends
     call_trends = calls_qs.extra(
         select={'date': 'DATE(call_date)'}
@@ -1582,7 +1738,6 @@ def admin_dashboard_data(request):
     # 5. Caller Performance
     caller_performance = []
     callers = CustomUser.objects.filter(projectmembership__role='caller').distinct()
-
     for caller in callers:
         caller_calls = calls_qs.filter(caller=caller)
         total_calls_caller = caller_calls.count()
@@ -1595,7 +1750,8 @@ def admin_dashboard_data(request):
             'total_calls': total_calls_caller,
             'successful_calls': successful_calls_caller,
             'success_rate': round(success_rate_caller, 1),
-            'avg_duration': round(avg_duration / 60, 1) if avg_duration else 0  # دقیقه
+            'avg_duration': round(avg_duration / 60, 1) if avg_duration else 0 ,
+            #"successful_calls_rate": 0  if total_calls_caller==0 else  total_calls_caller;# دقیقه
         })
 
     return Response({
@@ -1609,6 +1765,27 @@ def admin_dashboard_data(request):
             "projectLength":len(project_stats),
             'callStatusDistribution': call_status_distribution,
             'callTrends': list(call_trends),
-            'callerPerformance': caller_performance
+            'callerPerformance': caller_performance,
+            "no_time_rate" : no_time_rate,
+            "not_intrested_rate":not_intrested_rate,
+            "intersted_rate" : intersted_rate
         }
     })
+class CallExcelViewSet(viewsets.ReadOnlyModelViewSet):
+    """
+    Viewset برای نمایش اطلاعات تماس‌ها.
+    """
+    queryset = Call.objects.all().select_related('contact', 'project', 'caller')
+    serializer_class = CallExcelSerializer
+    permission_classes = [IsAuthenticated,IsAdminUser]
+
+    def get_queryset(self):
+        """
+        فیلتر کردن تماس‌ها بر اساس کاربر واردشده (فقط تماس‌های پروژه‌هایی که کاربر در آن‌ها عضو است).
+        """
+        user = self.request.user
+        if user.is_superuser:
+            return self.queryset
+        # دریافت پروژه‌هایی که کاربر در آن‌ها نقش دارد
+        project_ids = ProjectMembership.objects.filter(user=user).values_list('project_id', flat=True)
+        return self.queryset.filter(project__id__in=project_ids)

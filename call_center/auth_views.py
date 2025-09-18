@@ -55,7 +55,7 @@ def login(request):
     if not user:
         print('errorایمیل یا رمز عبور اشتباه است')
         return Response({
-            'error': 'ایمیل یا رمز عبور اشتباه است'
+            'error': 'شماره تلفن  یا رمز عبور اشتباه است'
         }, status=status.HTTP_401_UNAUTHORIZED)
 
     if not user.is_active:

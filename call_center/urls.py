@@ -1,3 +1,5 @@
+from csv import excel
+
 from django.urls import path, include
 from rest_framework.routers import DefaultRouter
 from . import views
@@ -16,6 +18,8 @@ router.register(r'saved-searches', views.SavedSearchViewSet)
 router.register(r'uploaded-files', views.UploadedFileViewSet)
 router.register(r'export-reports', views.ExportReportViewSet)
 router.register(r'cached-statistics', views.CachedStatisticsViewSet)
+router.register(r'excel',views.CallExcelViewSet,basename='excel')
+
 
 urlpatterns = [
     path('', include(router.urls)),

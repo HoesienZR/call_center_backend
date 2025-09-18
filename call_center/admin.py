@@ -86,11 +86,11 @@ class CallAdmin(admin.ModelAdmin):
     """
     تنظیمات پنل ادمین برای مدل تماس.
     """
-    list_display = ('contact', 'caller', 'project', 'call_date', 'call_result', 'status', 'duration')
+    list_display = ('contact', 'caller', 'project', 'call_date', 'call_result', 'status', 'duration','created_at')
     list_filter = ('project', 'call_result', 'status', 'call_date')
     search_fields = ('contact__full_name', 'caller__username', 'notes')
     autocomplete_fields = ['contact', 'caller', 'project']
-    readonly_fields = ('created_at', 'edited_at', 'edited_by', 'original_data') # فیلدهای فقط خواندنی
+    readonly_fields = ( 'edited_at', 'edited_by', 'original_data') # فیلدهای فقط خواندنی
 
 
 # 3. ثبت سایر مدل‌ها با تنظیمات پیش‌فرض یا ساده

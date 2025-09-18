@@ -33,7 +33,43 @@ class CustomUserSerializer(serializers.ModelSerializer):
         read_only_fields = (
             'is_staff', 'is_active', 'date_joined', 'last_login'
         )
+# your_app/serializers.py
+from rest_framework import serializers
+from .models import Call, Contact, Project, ProjectMembership
+import json
 
+class CallExcelSerializer(serializers.ModelSerializer):
+    contact_name = serializers.CharField(source='contact.full_name', read_only=True)
+    contact_phone = serializers.CharField(source='contact.phone', read_only=True)
+    project_name = serializers.CharField(source='project.name', read_only=True)
+    caller_phone = serializers.SerializerMethodField()
+    call_result_display = serializers.CharField(source='get_call_result_display', read_only=True)
+    call_status_display = serializers.CharField(source='get_status_display', read_only=True)
+    custom_fields = serializers.SerializerMethodField()
+    caller_name = serializers.CharField(source='caller.get_full_name', read_only=True)
+    class Meta:
+        model = Call
+        fields = [
+            "caller_name",
+            'contact_name',
+            'contact_phone',
+            'project_name',
+            'caller_phone',
+            'call_result_display',
+            'call_status_display',
+            'notes',
+            'duration',
+            'call_date',
+            'custom_fields',
+        ]
+
+    def get_caller_phone(self, obj):
+        # فرض می‌کنیم مدل User یک فیلد پروفایل دارد که شماره تماس در آن ذخیره شده است
+        return obj.caller.phone_number
+
+    def get_custom_fields(self, obj):
+        # دریافت فیلدهای سفارشی از مدل Contact
+        return obj.contact.custom_fields
 # 2. سریالایزر برای مدیریت نقش کاربران در پروژه
 class ProjectMembershipSerializer(serializers.ModelSerializer):
     """
