@@ -6,6 +6,7 @@ from django.db.models import Count, Avg, Sum, Q, F, Case, When, IntegerField, Fl
 from django.db.models.functions import Coalesce
 from django.db.models import Count, Avg, Q
 from django.db.models.aggregates import Sum
+from django.shortcuts import get_object_or_404
 from rest_framework import viewsets, status
 from rest_framework.response import Response
 from rest_framework.decorators import action, api_view, permission_classes
@@ -146,13 +147,13 @@ class ProjectViewSet(viewsets.ModelViewSet):
         """
         project = self.get_object()
         user = request.user
-        print(project)
-        print(user)
+
+
         # بررسی عضویت کاربر در پروژه
         try:
-            print("hello")
+
             membership = ProjectMembership.objects.get(project=project, user=user)
-            print(membership)
+
             return Response({
                 'project_id': project.id,
                 'project_name': project.name,
@@ -1695,9 +1696,7 @@ def admin_dashboard_data(request):
     for project in projects:
         project_calls = calls_qs.filter(project=project)
         total_calls_proj = project_calls.count()
-        print( project_calls.filter(status='answered'))
         successful_calls_proj = project_calls.filter(status='answered').count()
-
         project_stats.append({
             'name': project.name,
             'total_calls': total_calls_proj,
@@ -1780,7 +1779,7 @@ class CallExcelViewSet(viewsets.ReadOnlyModelViewSet):
     """
     queryset = Call.objects.all().select_related('contact', 'project', 'caller')
     serializer_class = CallExcelSerializer
-    permission_classes = [IsAuthenticated,IsAdminUser]
+    permission_classes = [IsAuthenticated,IsAdminUser | IsProjectAdmin]
 
     def get_queryset(self):
         """
@@ -1990,3 +1989,185 @@ def dashboard_data(request):
     }
 
     return Response(dashboard_data_response)
+
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def project_statistics_api(request, project_id):
+    """
+    API برای دریافت آمار کامل پروژه شامل آمار کلی و عملکرد تماس‌گیرندگان
+    """
+    try:
+        # دریافت پروژه
+        project = get_object_or_404(Project, id=project_id)
+
+        # بررسی دسترسی کاربر به پروژه
+        if not has_project_access(request.user, project):
+            return Response(
+                {"error": "شما دسترسی به این پروژه ندارید."},
+                status=status.HTTP_403_FORBIDDEN
+            )
+
+        # آمار کلی پروژه
+        general_stats = get_project_general_statistics(project)
+
+        # عملکرد تماس‌گیرندگان
+        caller_performance = get_caller_performance(project)
+
+        response_data = {
+            "project_id": project.id,
+            "project_name": project.name,
+            "general_statistics": general_stats,
+            "caller_performance": caller_performance
+        }
+
+        return Response(response_data, status=status.HTTP_200_OK)
+
+    except Project.DoesNotExist:
+        return Response(
+            {"error": "پروژه مورد نظر یافت نشد."},
+            status=status.HTTP_404_NOT_FOUND
+        )
+    except Exception as e:
+        return Response(
+            {"error": f"خطا در دریافت آمار: {str(e)}"},
+            status=status.HTTP_500_INTERNAL_SERVER_ERROR
+        )
+
+
+def has_project_access(user, project):
+    """بررسی دسترسی کاربر به پروژه"""
+    if user.is_superuser:
+        return True
+
+    # بررسی عضویت در پروژه
+    return ProjectMembership.objects.filter(
+        project=project,
+        user=user
+    ).exists()
+
+
+def get_project_general_statistics(project):
+    """دریافت آمار کلی پروژه"""
+
+    # تعداد کل مخاطبین
+    total_contacts = project.contacts.filter(is_active=True).count()
+
+    # تعداد کل تماس‌ها
+    total_calls = project.calls.count()
+
+    # تماس‌های موفق (نتیجه interested)
+    successful_calls = project.calls.filter(call_result='interested').count()
+
+    # تماس‌های پاسخ داده شده (وضعیت answered)
+    answered_calls = project.calls.filter(status='answered').count()
+
+    # محاسبه نرخ‌ها
+    success_rate = (successful_calls / total_calls * 100) if total_calls > 0 else 0
+    answer_rate = (answered_calls / total_calls * 100) if total_calls > 0 else 0
+
+    return {
+        "total_contacts": total_contacts,
+        "total_calls": total_calls,
+        "successful_calls": successful_calls,
+        "answered_calls": answered_calls,
+        "success_rate": round(success_rate, 2),
+        "answer_rate": round(answer_rate, 2)
+    }
+
+
+def get_caller_performance(project):
+    """دریافت عملکرد تماس‌گیرندگان پروژه"""
+
+    # دریافت همه تماس‌گیرندگانی که در این پروژه تماس گرفته‌اند
+    callers_with_calls = User.objects.filter(
+        calls__project=project
+    ).distinct()
+
+    caller_performance = []
+
+    for caller in callers_with_calls:
+        # تماس‌های این تماس‌گیرنده در این پروژه
+        caller_calls = project.calls.filter(caller=caller)
+
+        # آمارهای پایه
+        total_calls = caller_calls.count()
+
+        # تماس‌های با نتایج مختلف
+        interested_calls = caller_calls.filter(call_result='interested').count()
+        no_time_calls = caller_calls.filter(call_result='no_time').count()
+        not_interested_calls = caller_calls.filter(call_result='not_interested').count()
+
+        # تماس‌های با وضعیت‌های مختلف
+        answered_calls = caller_calls.filter(status='answered').count()
+        no_answer_calls = caller_calls.filter(status='no_answer').count()
+        wrong_number_calls = caller_calls.filter(status='wrong_number').count()
+        pending_calls = caller_calls.filter(status='pending').count()
+
+        # مدت زمان مکالمه (فقط برای تماس‌هایی که duration دارند)
+        duration_stats = caller_calls.exclude(duration__isnull=True).aggregate(
+            total_duration=Sum('duration'),
+            avg_duration=Avg('duration')
+        )
+
+        total_duration = duration_stats['total_duration'] or 0
+        avg_duration = duration_stats['avg_duration'] or 0
+
+        # محاسبه نرخ‌ها
+        success_rate = (interested_calls / total_calls * 100) if total_calls > 0 else 0
+        answer_rate = (answered_calls / total_calls * 100) if total_calls > 0 else 0
+
+        # تبدیل مدت زمان از ثانیه به دقیقه و ثانیه
+        avg_duration_formatted = format_duration(avg_duration)
+        total_duration_formatted = format_duration(total_duration)
+
+        caller_data = {
+            "caller_id": caller.id,
+            "first_name": caller.first_name,
+            "last_name": caller.last_name,
+            "full_name": caller.get_full_name(),
+            "username": caller.username,
+            "phone_number": getattr(caller, 'phone_number', ''),
+            "total_calls": total_calls,
+
+            # تماس‌های بر اساس نتیجه
+            "interested_calls": interested_calls,
+            "no_time_calls": no_time_calls,
+            "not_interested_calls": not_interested_calls,
+
+            # تماس‌های بر اساس وضعیت
+            "answered_calls": answered_calls,
+            "no_answer_calls": no_answer_calls,
+            "wrong_number_calls": wrong_number_calls,
+            "pending_calls": pending_calls,
+
+            # نرخ‌ها
+            "success_rate": round(success_rate, 2),  # نرخ علاقه‌مندی
+            "answer_rate": round(answer_rate, 2),  # نرخ پاسخ‌دهی
+
+            # مدت زمان
+            "total_duration_seconds": total_duration,
+            "avg_duration_seconds": round(avg_duration, 2),
+            "total_duration_formatted": total_duration_formatted,
+            "avg_duration_formatted": avg_duration_formatted,
+
+            # جزئیات اضافی
+            "calls_with_duration": caller_calls.exclude(duration__isnull=True).count()
+        }
+
+        caller_performance.append(caller_data)
+
+    # مرتب‌سازی بر اساس تعداد تماس‌های موفق (علاقه‌مند) نزولی
+    caller_performance.sort(key=lambda x: x['interested_calls'], reverse=True)
+
+    return caller_performance
+
+
+def format_duration(seconds):
+    """تبدیل ثانیه به فرمت دقیقه:ثانیه"""
+    if not seconds:
+        return "00:00"
+
+    minutes = int(seconds // 60)
+    remaining_seconds = int(seconds % 60)
+    return f"{minutes:02d}:{remaining_seconds:02d}"

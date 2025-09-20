@@ -31,6 +31,7 @@ urlpatterns = [
     path('auth/token/', auth_views.CustomAuthToken.as_view(), name='api_token_auth'),
     path('',views.check_postgresql_connection, name='check_postgresql_connection'),
     path('admin/dashboard/', views.dashboard_data, name='dashboard_data'),
+    path('project/<int:project_id>/statistics/',views.project_statistics_api, name='project-statistics-api'),
 ]
 
 
