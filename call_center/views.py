@@ -1692,6 +1692,7 @@ def admin_dashboard_data(request):
 
     # 2. Project Statistics
     project_stats = []
+    project_stats = []
     projects = Project.objects.filter(status='active')
     for project in projects:
         project_calls = calls_qs.filter(project=project)
@@ -2171,3 +2172,16 @@ def format_duration(seconds):
     minutes = int(seconds // 60)
     remaining_seconds = int(seconds % 60)
     return f"{minutes:02d}:{remaining_seconds:02d}"
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def dashboard_stats(request):
+    project_count = Project.objects.count()
+    calls_count = Call.objects.count()
+    answered_calls_count = Call.objects.filter(status='answered').count()
+    pending_calls_count = Call.objects.filter(status='pending').count()
+    result = {"project_count":project_count,
+              "calls_count":calls_count,
+              "answered_calls_count":answered_calls_count,
+              "pending_calls_count":pending_calls_count,
+    }
+    return Response(result,status=status.HTTP_200_OK)

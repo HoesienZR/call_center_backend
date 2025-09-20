@@ -106,7 +106,9 @@ class ProjectSerializer(serializers.ModelSerializer):
     contacts_count = serializers.IntegerField(source='contacts.count', read_only=True)
     calls_count = serializers.IntegerField(source='calls.count', read_only=True)
     completed_calls_count = serializers.SerializerMethodField()
-
+    project_statistics = serializers.SerializerMethodField
+    def get_project_statistics(self,obj):
+        return obj.get_statistics()
     def get_completed_calls_count(self, obj):
         return obj.calls.filter(status="completed").count()
 
@@ -183,7 +185,6 @@ class ContactSerializer(serializers.ModelSerializer):
             contact__phone=phone_number,
             status="not_answered"
         ).count()
-        print(not_answered_calls)
         return not_answered_calls
 
     def get_contact_calls_count(self, obj):
@@ -197,7 +198,7 @@ class ContactSerializer(serializers.ModelSerializer):
             contact__phone=phone_number,
             status="answered"
         ).count()
-        print("answer",answered_calls)
+
         # تعداد کل تماس‌ها
         total_calls = Call.objects.filter(contact__phone=phone_number).count()
 
@@ -206,7 +207,6 @@ class ContactSerializer(serializers.ModelSerializer):
         # اگر تماسی نباشد، نرخ صفر است
         if total_calls == 0:
             return 0.0
-        print("natayeg rate",answered_calls / total_calls)
         # محاسبه درصد و گرد کردن به دو رقم اعشار
         rate = int((answered_calls / total_calls) * 100)
         return rate
@@ -350,10 +350,11 @@ class ContactSerializer(serializers.ModelSerializer):
         # منطق تخصیص تماس‌گیرنده
         # اگر caller_phone_number داده شده، سعی در یافتن کاربر با آن شماره
         caller_phone_number = validated_data.pop('caller_phone_number', None)
+
         if caller_phone_number and 'assigned_caller' not in validated_data:
             try:
                 # جستجو بر اساس فیلد phone در مدل کاربر
-                caller_user = CustomUser.objects.get(phone=caller_phone_number)
+                caller_user = CustomUser.objects.get(phone_number=caller_phone_number)
                 # بررسی عضویت در پروژه
                 if ProjectMembership.objects.filter(
                         project=project, user=caller_user, role__in=['caller', 'admin']
