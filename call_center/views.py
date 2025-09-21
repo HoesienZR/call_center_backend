@@ -20,7 +20,7 @@ import logging
 import random
 from django.db import connections
 from django.http import HttpResponse
-
+from rest_framework.pagination import PageNumberPagination
 from .models import (
     Project, ProjectCaller, Contact, Call, CallEditHistory,
     CallStatistics, SavedSearch, UploadedFile, ExportReport, CachedStatistics, ProjectMembership, CustomUser
@@ -1774,20 +1774,25 @@ def admin_dashboard_data(request):
             "intersted_rate" : intersted_rate
         }
     })
+class LargePageSizePagination(PageNumberPagination):
+    page_size = 100000
+    page_size_query_param = 'page_size'
+    max_page_size = 100000
 class CallExcelViewSet(viewsets.ReadOnlyModelViewSet):
     """
     Viewset برای نمایش اطلاعات تماس‌ها.
     """
+    pagination_class = LargePageSizePagination
     queryset = Call.objects.all().select_related('contact', 'project', 'caller')
     serializer_class = CallExcelSerializer
     permission_classes = [IsAuthenticated,IsAdminUser | IsProjectAdmin]
-
     def get_queryset(self):
         """
         فیلتر کردن تماس‌ها بر اساس کاربر واردشده (فقط تماس‌های پروژه‌هایی که کاربر در آن‌ها عضو است).
         """
         user = self.request.user
         if user.is_superuser:
+
             return self.queryset
         # دریافت پروژه‌هایی که کاربر در آن‌ها نقش دارد
         project_ids = ProjectMembership.objects.filter(user=user).values_list('project_id', flat=True)
