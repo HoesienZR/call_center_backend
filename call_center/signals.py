@@ -1,47 +1,42 @@
-from django.contrib.auth.models import Group, Permission, User
-from django.db.models.signals import post_migrate, post_save
+from django.db.models.signals import post_save
 from django.dispatch import receiver
-from django.core.exceptions import ObjectDoesNotExist
-from .models import UserProfile
 
-@receiver(post_migrate)
-def create_groups(sender, **kwargs):
-    # ایجاد گروه تماس‌گیرنده
-    caller_group, created = Group.objects.get_or_create(name='Caller')
-    if created or not caller_group.permissions.exists():
-        permissions = []
-        for codename in ['view_project', 'add_call', 'change_call', 'view_contact', 'manage_project']:
-            try:
-                permission = Permission.objects.get(
-                    codename=codename,
-                    content_type__app_label='call_center'
-                )
-                permissions.append(permission)
-            except Permission.DoesNotExist:
-                print(f"Warning: Permission with codename '{codename}' does not exist for app 'call_center'.")
-        caller_group.permissions.set(permissions)
+from call_center.models import Call
 
-    # ایجاد گروه کاربر معمولی
-    regular_user_group, created = Group.objects.get_or_create(name='Regular User')
-    if created or not regular_user_group.permissions.exists():
-        permissions = []
-        for codename in ['view_project', 'view_contact']:
-            try:
-                permission = Permission.objects.get(
-                    codename=codename,
-                    content_type__app_label='call_center'
-                )
-                permissions.append(permission)
-            except Permission.DoesNotExist:
-                print(f"Warning: Permission with codename '{codename}' does not exist for app 'call_center'.")
-        regular_user_group.permissions.set(permissions)
+from django.db.models.signals import post_save, pre_save
+from django.dispatch import receiver
+from .models import Call, Contact
 
-@receiver(post_save, sender=User)
-def create_or_update_user_profile(sender, instance, created, **kwargs):
-    if created:
-        UserProfile.objects.create(user=instance)
-    else:
-        try:
-            instance.profile.save()
-        except ObjectDoesNotExist:
-            UserProfile.objects.create(user=instance)
+@receiver(post_save, sender=Call)
+def update_contact_call_status(sender, instance, created, **kwargs):
+    """
+    بعد از ذخیره هر تماس، وضعیت تماس مخاطب را به‌روزرسانی کن
+    """
+    if instance.contact:
+        instance.contact.call_status = instance.status
+        instance.contact.last_call_date = instance.call_date
+        instance.contact.save(update_fields=['call_status', 'last_call_date'])
+
+
+# signals.py
+
+
+
+@receiver(post_save, sender=Call)
+def update_contact_status_on_callback_request(sender, instance, created, **kwargs):
+    """
+    سیگنال برای تغییر وضعیت مخاطب به "pending" زمانی که نتیجه تماس "callback_requested" باشد
+    """
+    if instance.call_result == 'callback_requested':
+        # به‌روزرسانی وضعیت مخاطب به "در انتظار تماس"
+        contact = instance.contact
+        contact.call_status = 'pending'
+        contact.save(update_fields=['call_status'])
+
+        # اختیاری: ثبت لاگ برای این تغییر
+        from .models import ContactLog
+        ContactLog.objects.create(
+            contact=contact,
+            action=f"وضعیت تماس به 'در انتظار' تغییر یافت بدلیل درخواست تماس مجدد در تماس شماره {instance.id}",
+            performed_by=instance.caller
+        )

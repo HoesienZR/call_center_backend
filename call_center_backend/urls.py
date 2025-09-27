@@ -22,6 +22,7 @@ from django.conf.urls.static import static
 urlpatterns = [
     path("admin/", admin.site.urls),
     path("api/", include("call_center.urls")),
+    path('silk/', include('silk.urls', namespace='silk'))
 ]
 
 if settings.DEBUG:
