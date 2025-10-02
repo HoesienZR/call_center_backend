@@ -10,13 +10,17 @@ For the full list of settings and their values, see
 https://docs.djangoproject.com/en/5.2/ref/settings/
 """
 import os
+from email.policy import default
 from pathlib import Path
 import dj_database_url
+from dotenv import load_dotenv
 
+
+load_dotenv()
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
 
-
+AUTH_USER_MODEL = 'call_center.CustomUser'
 # Quick-start development settings - unsuitable for production
 # See https://docs.djangoproject.com/en/5.2/howto/deployment/checklist/
 
@@ -34,7 +38,7 @@ CORS_ALLOWED_ORIGINS = [
     "http://127.0.0.1:5173",
     "http://192.168.20.28:5173",
     'http://localhost:5173',
-    "https://markaztamas.liara.run"
+    'https://callcenter.liara.run'
 ]
 CORS_ALLOW_CREDENTIALS = True
 REST_FRAMEWORK = {
@@ -63,11 +67,14 @@ INSTALLED_APPS = [
     'corsheaders',
     'call_center',
     'django_celery_beat',
+    "silk",
+    'import_export',
 
 ]
 USE_TZ = True
 
 MIDDLEWARE = [
+    "silk.middleware.SilkyMiddleware",
     'django.middleware.security.SecurityMiddleware',
     'corsheaders.middleware.CorsMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
@@ -76,6 +83,7 @@ MIDDLEWARE = [
     'django.contrib.auth.middleware.AuthenticationMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
+
 ]
 
 ROOT_URLCONF = 'call_center_backend.urls'
@@ -100,7 +108,6 @@ WSGI_APPLICATION = 'call_center_backend.wsgi.application'
 
 # Database
 # https://docs.djangoproject.com/en/5.2/ref/settings/#databases
-
 
 
 
@@ -138,6 +145,7 @@ USE_I18N = True
 # https://docs.djangoproject.com/en/5.2/howto/static-files/
 
 STATIC_URL = 'static/'
+STATIC_ROOT = 'staticfiles/'
 
 # Default primary key field type
 # https://docs.djangoproject.com/en/5.2/ref/settings/#default-auto-field
@@ -148,16 +156,35 @@ MEDIA_ROOT = os.path.join(BASE_DIR, 'media')
 MEDIA_URL = '/media/'
 
 # Celery settings
-CELERY_BROKER_URL = 'redis://localhost:6379/0'
+CELERY_BROKER_URL = 'redis://localhost:6379/0'  # یا RabbitMQ
 CELERY_RESULT_BACKEND = 'redis://localhost:6379/0'
 CELERY_ACCEPT_CONTENT = ['json']
 CELERY_TASK_SERIALIZER = 'json'
 CELERY_RESULT_SERIALIZER = 'json'
 CELERY_TIMEZONE = 'Asia/Tehran'
 
+# تنظیمات Celery Beat برای اجرای دوره‌ای
+CELERY_BEAT_SCHEDULE = {
+    'reassign-expired-contacts': {
+        'task': 'your_app.tasks.reassign_expired_contacts',
+        'schedule': 3600.0,  # هر ساعت چک کن (3600 ثانیه)
+    },
+}
 # other codes ...
 
 
 DATABASES = {
-    'default': dj_database_url.config(os.path.dirname(os.path.abspath(__file__))),
+  'default': dj_database_url.config(default=os.environ.get("DATABASE_URL")),
 }
+"""
+DATABASES = {
+    'default': {
+       'ENGINE': 'django.db.backends.postgresql',
+        'NAME': 'call_center_db',
+     'USER': 'postgres',
+       'PASSWORD': '@Mirzr4848',
+       'HOST': 'localhost',  # یا IP سرور دیتابیس
+       'PORT': '5432',  # پورت پیش‌فرض PostgreSQL
+        }
+    }
+"""
