@@ -177,8 +177,14 @@ CELERY_BEAT_SCHEDULE = {
         'schedule': 3600.0,  # هر ساعت چک کن (3600 ثانیه)
     },
 }
-# other codes ...
 
+# Cache settings (using Redis)
+CACHES = {
+    "default": {
+        "BACKEND": "django.core.cache.backends.redis.RedisCache",
+        "LOCATION": "redis://127.0.0.1:6379/1",  # دیتابیس 1 برای کش
+    }
+}
 
 DATABASES = {
   'default': dj_database_url.config(default=os.environ.get("DATABASE_URL")),
