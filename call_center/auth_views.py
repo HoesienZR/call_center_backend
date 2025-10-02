@@ -5,7 +5,7 @@ from rest_framework import status
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import AllowAny
 from django.contrib.auth import authenticate
-from .models import CustomUser as User
+from .models import CustomUser as User, PhoneOTP
 from .serializers import CustomUserSerializer
 
 
@@ -169,3 +169,54 @@ def register(request):
             'error': f'خطا در ایجاد کاربر: {str(e)}'
         }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
+@api_view(['POST'])
+@permission_classes([AllowAny])
+def send_otp(request):
+    phone = request.data.get('phone')
+    if not phone:
+        return Response({"error": "شماره تلفن الزامی است"}, status=status.HTTP_400_BAD_REQUEST)
+
+    import random
+    otp = str(random.randint(100000, 999999))
+
+    # ذخیره OTP در مدل
+    PhoneOTP.objects.create(phone_number=phone, otp=otp)
+
+    # TODO: ارسال SMS واقعی با otp
+    print(f"OTP for {phone}: {otp}")
+
+    return Response({"message": "کد OTP ارسال شد"})
+
+
+@api_view(['POST'])
+@permission_classes([AllowAny])
+def verify_otp(request):
+    phone = request.data.get('phone')
+    otp = request.data.get('otp')
+
+    if not phone or not otp:
+        return Response({"error": "شماره تلفن و OTP الزامی است"}, status=status.HTTP_400_BAD_REQUEST)
+
+    try:
+        otp_obj = PhoneOTP.objects.filter(phone_number=phone, otp=otp).last()
+        if not otp_obj:
+            return Response({"error": "کد OTP اشتباه است"}, status=status.HTTP_400_BAD_REQUEST)
+        if otp_obj.is_expired():
+            return Response({"error": "کد OTP منقضی شده است"}, status=status.HTTP_400_BAD_REQUEST)
+
+        otp_obj.is_verified = True
+        otp_obj.save()
+
+        user = User.objects.get(phone_number=phone)
+        token, created = Token.objects.get_or_create(user=user)
+
+        return Response({
+            "token": token.key,
+            "user_id": user.pk,
+            "username": user.username,
+            "phone_number": user.phone_number,
+            "full_name": user.get_full_name()
+        })
+
+    except User.DoesNotExist:
+        return Response({"error": "کاربری با این شماره یافت نشد"}, status=status.HTTP_404_NOT_FOUND)

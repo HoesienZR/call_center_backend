@@ -33,6 +33,8 @@ urlpatterns = [
     path('admin/dashboard/', views.dashboard_data, name='dashboard_data'),
     path('project/<int:project_id>/statistics/',views.project_statistics_api, name='project-statistics-api'),
     path('main_dashboard', views.dashboard_stats, name='dashboard_data'),
+    path('send-otp/', auth_views.send_otp, name='send-otp'),
+    path('verify-otp/', auth_views.verify_otp, name='verify-otp'),
 ]
 
 
