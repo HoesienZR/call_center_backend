@@ -190,6 +190,7 @@ class Contact(models.Model):
         ('no_answer', 'پاسخ نداد'),
         ('pending', 'در حال انتظار')
     ]
+    is_special = models.BooleanField(default=False)
     user = models.OneToOneField(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="user_contact", verbose_name="کاربر مخاطب", blank=True, null=True)
     project = models.ForeignKey("Project", on_delete=models.CASCADE, related_name="contacts", verbose_name="پروژه")
     full_name = models.CharField(max_length=100, verbose_name="نام کامل")
