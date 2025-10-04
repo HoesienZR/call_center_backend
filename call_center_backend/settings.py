@@ -186,10 +186,9 @@ CACHES = {
     }
 }
 
-DATABASES = {
-  'default': dj_database_url.config(default=os.environ.get("DATABASE_URL")),
-}
-"""
+# DATABASES = {
+#   'default': dj_database_url.config(default=os.environ.get("DATABASE_URL")),
+# }
 DATABASES = {
     'default': {
        'ENGINE': 'django.db.backends.postgresql',
@@ -200,4 +199,3 @@ DATABASES = {
        'PORT': '5432',  # پورت پیش‌فرض PostgreSQL
         }
     }
-"""
