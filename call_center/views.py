@@ -1,5 +1,5 @@
 from random import random
-from django.db.models import Count, Sum, Avg
+from django.db.models import Count, Sum, Avg, Prefetch
 import numpy as np
 import pandas as pd
 from django.db.models import Count, Avg, Sum, Q, F, Case, When, IntegerField, FloatField
@@ -15,7 +15,7 @@ from rest_framework.decorators import action
 from django.db import transaction, models
 from datetime import datetime
 from .permission import  IsProjectCaller, IsProjectAdmin, IsProjectAdminOrCaller, IsReadOnlyOrProjectAdmin
-from .models import CustomUser as User
+from .models import CustomUser as User, Question, CallAnswer
 import logging
 import random
 from django.db import connections
@@ -33,7 +33,7 @@ from .serializers import (
 )
 from .utils import (
     validate_phone_number, normalize_phone_number, generate_secure_password,
-    is_caller_user, assign_contacts_randomly, validate_excel_data, clean_string_field
+    is_caller_user, assign_contacts_randomly, validate_excel_data, clean_string_field,generate_username
 )
 
 # تنظیم logger
@@ -116,12 +116,25 @@ class ProjectViewSet(viewsets.ModelViewSet):
     serializer_class = ProjectSerializer
     permission_classes = [IsAuthenticated, IsReadOnlyOrProjectAdmin]
 
-
     def get_queryset(self):
         user = self.request.user
+        base_prefetch = [
+            Prefetch(
+                'questions',
+                queryset=Question.objects.prefetch_related('choices')
+            ),
+            Prefetch(
+                'calls__answers',
+                queryset=CallAnswer.objects.select_related('selected_choice').prefetch_related(
+                    Prefetch('question__choices')
+                )
+            )
+        ]
+
         if user.is_superuser:
-            return Project.objects.all()
-        return user.projects.distinct()
+            return Project.objects.all().prefetch_related(*base_prefetch)
+
+        return user.projects.distinct().prefetch_related(*base_prefetch)
 
     def perform_create(self, serializer):
         user = self.request.user
@@ -472,11 +485,10 @@ class ProjectViewSet(viewsets.ModelViewSet):
                 return Response({
                     "error": f"خطا در خواندن فایل اکسل: {str(e)}"
                 }, status=status.HTTP_400_BAD_REQUEST)
-
             # بررسی وجود ستون شماره تلفن
-            if 'phone_number' not in df.columns:
+            if ('phone_number' and "first_name" and "last_name" not in df.columns):
                 return Response({
-                    "error": "ستون 'phone_number' الزامی است",
+                    "error": "ستون های  ';last_name','first_name',' phone_number'  الزامی است",
                     "required_columns": ["phone_number"],
                     "available_columns": list(df.columns)
                 }, status=status.HTTP_400_BAD_REQUEST)
@@ -500,7 +512,8 @@ class ProjectViewSet(viewsets.ModelViewSet):
                     try:
                         # تمیز کردن شماره تلفن
                         phone_number = clean_string_field(str(row.get('phone_number', '')))
-
+                        first_name = clean_string_field(str(row.get("first_name","")))
+                        last_name = clean_string_field(str(row.get("last_name","")))
                         if not phone_number or phone_number == 'nan':
                             failed_callers.append({
                                 'row': index + 2,
@@ -508,6 +521,7 @@ class ProjectViewSet(viewsets.ModelViewSet):
                                 'error': 'شماره تلفن الزامی است'
                             })
                             continue
+
 
                         # نرمال‌سازی و اعتبارسنجی شماره تلفن
                         try:
@@ -532,13 +546,8 @@ class ProjectViewSet(viewsets.ModelViewSet):
                             normalized_phone = "0" + normalized_phone
                             user = CustomUser.objects.get(phone_number=normalized_phone)
                         except CustomUser.DoesNotExist:
-                            failed_callers.append({
-                                'row': index + 2,
-                                'phone_number': phone_number,
-                                'error': 'کاربری با این شماره تلفن در سیستم یافت نشد'
-                            })
-                            continue
-
+                            user = CustomUser.objects.create(phone_number=normalized_phone,first_name=first_name,
+                                                             last_name=last_name,username=generate_username(normalized_phone))
                         # بررسی اینکه آیا کاربر قبلاً عضو پروژه است
                         existing_membership = ProjectMembership.objects.filter(
                             project=project,
@@ -811,20 +820,20 @@ class ContactViewSet(viewsets.ModelViewSet):
         """
         فیلتر کردن مخاطبین بر اساس نقش کاربر و پارامتر project_id
         """
+        bs_queryset = self.queryset
         user = self.request.user
+        call_status =  self.request.query_params.get("status")
         project_id = self.request.query_params.get('project_id')
-
+        contacts = []
         # اگر project_id مشخص شده، فقط مخاطبین آن پروژه را برگردان
         if project_id:
             try:
                 project = Project.objects.get(id=project_id)
-
                 # بررسی دسترسی کاربر به پروژه
                 if not (user.is_superuser or ProjectMembership.objects.filter(
                         project=project, user=user
                 ).exists()):
                     return Contact.objects.none()
-
                 # بررسی نقش کاربر در پروژه
                 is_admin = ProjectMembership.objects.filter(
                     project=project, user=user, role='admin'
@@ -832,18 +841,20 @@ class ContactViewSet(viewsets.ModelViewSet):
 
                 if user.is_superuser or is_admin:
                     # ادمین همه مخاطبین پروژه را می‌بیند
-                    return Contact.objects.filter(
+                    contacts= bs_queryset.filter(
                         project=project,
-                        call_status="pending"
+
                     ).select_related('assigned_caller', 'project')
                 else:
                     # تماس‌گیرنده فقط مخاطبین تخصیص یافته به خودش را می‌بیند
-                    return Contact.objects.filter(
+                    contacts =  bs_queryset.filter(
                         project=project,
                         assigned_caller=user,
                         call_status="pending"
                     ).select_related('assigned_caller', 'project')
-
+                if call_status:
+                    return contacts.filter(call_status=call_status)
+                return contacts
             except Project.DoesNotExist:
                 return Contact.objects.none()
 
@@ -859,15 +870,18 @@ class ContactViewSet(viewsets.ModelViewSet):
         ).exists()
 
         if is_admin_in_any_project:
-            return Contact.objects.filter(
+            contacts =  Contact.objects.filter(
                 project__in=user_projects,
-                call_status="pending"
+
+
             )
         else:
-            return Contact.objects.filter(
+            contacts =  Contact.objects.filter(
                 assigned_caller=user,
-                call_status="pending"
             )
+            if call_status:
+                return contacts.filter(call_status=call_status)
+            return contacts
 
     def perform_create(self, serializer):
         """

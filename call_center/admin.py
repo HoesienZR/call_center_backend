@@ -14,6 +14,9 @@ from .models import (
     UploadedFile,
     ExportReport,
     ContactLog,
+    AnswerChoice,
+    Question,
+
 )
 
 # 1. سفارشی‌سازی پنل ادمین برای مدل CustomUser
@@ -69,13 +72,22 @@ class ProjectMembershipAdmin(admin.ModelAdmin):
     search_fields = ('project__name', 'user__username')
     autocomplete_fields = ['project', 'user']
 
+@admin.register(AnswerChoice)
+class AnswerChoiceAdmin(admin.ModelAdmin):
+    list_display = ['question',"text"]
+
+@admin.register(Question)
+class QuestionAdmin(admin.ModelAdmin):
+    list_display = ["text"]
+
+
 
 @admin.register(Contact)
 class ContactAdmin(admin.ModelAdmin):
     """
     تنظیمات پنل ادمین برای مدل مخاطب.
     """
-    list_display = ('full_name', 'phone', 'project', 'call_status', 'assigned_caller', 'last_call_date')
+    list_display = ('full_name', 'phone', 'project', 'call_status', 'assigned_caller', 'last_call_date',"birth_date","gender")
     list_filter = ('project', 'call_status', 'is_active')
     search_fields = ('full_name', 'phone', 'email', 'project__name')
     # برای بهبود عملکرد، فیلدهای سنگین را در لیست نمایش ندهید

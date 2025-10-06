@@ -5,7 +5,7 @@ from django.conf import settings
 from django.core.exceptions import ValidationError
 import json
 from datetime import datetime, timedelta
-
+from django_jalali.db import models as jmodels
 
 # 1. مدل کاربر سفارشی با فیلد شماره موبایل و اجازه ساخت پروژه
 class CustomUser(AbstractUser):
@@ -189,6 +189,13 @@ class Contact(models.Model):
         ('no_answer', 'پاسخ نداد'),
         ('pending', 'در حال انتظار')
     ]
+    GENDER_CHOICES = [
+        ('male','مرد'),
+        ("female","زن"),
+        ("none","ترجیح میدهم که نگویم")
+                        ]
+    birth_date  = models.DateField(null=True,blank=True,verbose_name="تاریخ تولد")
+
     user = models.OneToOneField(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="user_contact", verbose_name="کاربر مخاطب", blank=True, null=True)
     project = models.ForeignKey("Project", on_delete=models.CASCADE, related_name="contacts", verbose_name="پروژه")
     full_name = models.CharField(max_length=100, verbose_name="نام کامل")
@@ -211,7 +218,7 @@ class Contact(models.Model):
     created_at = models.DateTimeField(auto_now_add=True, verbose_name="تاریخ ایجاد")
     updated_at = models.DateTimeField(auto_now=True, verbose_name="تاریخ به‌روزرسانی")
     created_by = models.ForeignKey(settings.AUTH_USER_MODEL,related_name="created_contacts", null=True,blank=True,on_delete=models.CASCADE,verbose_name="ایجاد شده توسط")
-
+    gender = models.CharField(max_length=20,choices=GENDER_CHOICES,default="none")
     class Meta:
         verbose_name = "مخاطب"
         verbose_name_plural = "مخاطبین"
@@ -618,3 +625,49 @@ class ContactLog(models.Model):
 
     def __str__(self):
         return f"{self.action} - {self.contact.full_name} at {self.timestamp}"
+class Question(models.Model):
+    """مدل برای سوالات مرتبط با پروژه"""
+    project = models.ForeignKey(Project, on_delete=models.CASCADE, related_name='questions', verbose_name="پروژه")
+    text = models.CharField(max_length=200, verbose_name="متن سوال")
+    order = models.PositiveIntegerField(default=0, verbose_name="ترتیب نمایش")
+
+    class Meta:
+        verbose_name = "سوال"
+        verbose_name_plural = "سوالات"
+
+    def clean(self):
+        # Enforce at most 5 questions per project
+        if self.project.questions.count() >= 5:
+            raise ValidationError("هر پروژه حداکثر ۵ سوال می‌تواند داشته باشد.")
+        super().clean()
+
+    def __str__(self):
+        return self.text
+class AnswerChoice(models.Model):
+    """مدل برای گزینه‌های پاسخ هر سوال"""
+    question = models.ForeignKey(Question, on_delete=models.CASCADE, related_name='choices', verbose_name="سوال")
+    text = models.CharField(max_length=100, verbose_name="متن گزینه")
+
+    class Meta:
+        verbose_name = "گزینه پاسخ"
+        verbose_name_plural = "گزینه‌های پاسخ"
+
+    def clean(self):
+        # Enforce at most 5 choices per question
+        if self.question.choices.count() >= 5:
+            raise ValidationError("هر سوال حداکثر ۵ گزینه پاسخ می‌تواند داشته باشد.")
+        super().clean()
+class CallAnswer(models.Model):
+    """مدل واسط برای پاسخ‌های تماس به سوالات"""
+    call = models.ForeignKey(Call, on_delete=models.CASCADE, related_name='answers', verbose_name="تماس")
+    question = models.ForeignKey(Question, on_delete=models.CASCADE, verbose_name="سوال")
+    selected_choice = models.ForeignKey(AnswerChoice, on_delete=models.SET_NULL, null=True, blank=True, verbose_name="گزینه انتخاب‌شده")
+    custom_answer = models.CharField(max_length=200, blank=True, verbose_name="پاسخ سفارشی (اختیاری)")
+
+    class Meta:
+        unique_together = ('call', 'question')  # Prevent duplicate answers per call-question pair
+        verbose_name = "پاسخ تماس"
+        verbose_name_plural = "پاسخ‌های تماس"
+
+    def __str__(self):
+        return f"{self.call} - {self.question.text}"
