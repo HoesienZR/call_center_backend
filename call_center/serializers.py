@@ -1,7 +1,7 @@
 # call_center/serializers.py
 import re
 
-from django.db.models import Count
+from django.db.models import Count, Prefetch
 from rest_framework import serializers
 from django.conf import settings
 from .models import (
@@ -15,7 +15,7 @@ from .models import (
     SavedSearch,
     UploadedFile,
     ExportReport,
-    CachedStatistics,
+    CachedStatistics, Question, AnswerChoice, CallAnswer,
 )
 from rest_framework import serializers
 # 1. سریالایزر برای مدل کاربر سفارشی
@@ -37,7 +37,11 @@ class CustomUserSerializer(serializers.ModelSerializer):
 from rest_framework import serializers
 from .models import Call, Contact, Project, ProjectMembership
 import json
-
+class AnswerChoiceSerializer(serializers.ModelSerializer):
+    """Serializer for answer choices."""
+    class Meta:
+        model = AnswerChoice
+        fields = ['id', 'text']
 class CallExcelSerializer(serializers.ModelSerializer):
     contact_name = serializers.CharField(source='contact.full_name', read_only=True)
     contact_phone = serializers.CharField(source='contact.phone', read_only=True)
@@ -73,6 +77,36 @@ class CallExcelSerializer(serializers.ModelSerializer):
         # دریافت فیلدهای سفارشی از مدل Contact
         return obj.contact.custom_fields
 # 2. سریالایزر برای مدیریت نقش کاربران در پروژه
+
+class QuestionSerializer(serializers.ModelSerializer):
+    """Serializer for questions, including choices."""
+    choices = AnswerChoiceSerializer(many=True, read_only=True)
+
+    class Meta:
+        model = Question
+        fields = ['id', 'text', 'choices']
+class CallAnswerSummarySerializer(serializers.ModelSerializer):
+    """Serializer for summarizing answers per question in a project."""
+    question = QuestionSerializer(read_only=True)
+    selected_choice = AnswerChoiceSerializer(read_only=True)
+    # Aggregate fields: e.g., count of selections per choice
+    choice_counts = serializers.SerializerMethodField()
+
+    class Meta:
+        model = CallAnswer
+        fields = ['question', 'selected_choice', 'custom_answer', 'choice_counts']
+
+    def get_choice_counts(self, obj):
+        # Optional: Aggregate counts for this answer's choice across the project
+        project = self.context['project']
+        if obj.selected_choice:
+            count = CallAnswer.objects.filter(
+                call__project=project,
+                selected_choice=obj.selected_choice
+            ).count()
+            return {'count': count, 'choice_id': obj.selected_choice.id}
+        return None
+
 class ProjectMembershipSerializer(serializers.ModelSerializer):
     """
     سریالایزر برای مدل ProjectMembership.
@@ -95,6 +129,8 @@ class ProjectSerializer(serializers.ModelSerializer):
     """
     سریالایزر برای مدل Project.
     """
+    questions = QuestionSerializer(many=True, read_only=True,)
+    call_answers_summary = serializers.SerializerMethodField()
     created_by = CustomUserSerializer(read_only=True)
     created_by_id = serializers.PrimaryKeyRelatedField(
         queryset=CustomUser.objects.all(), source='created_by', write_only=True
@@ -112,13 +148,50 @@ class ProjectSerializer(serializers.ModelSerializer):
     def get_completed_calls_count(self, obj):
         return obj.calls.filter(status="completed").count()
 
+    def get_call_answers_summary(self, obj):
+        """Custom field to retrieve all answers from the project's calls, grouped by question."""
+        project = obj  # The project instance
+        # Fetch answers with prefetch for efficiency
+        answers = CallAnswer.objects.filter(
+            call__project=project
+        ).select_related(
+            'question', 'selected_choice'
+        ).prefetch_related(
+            Prefetch('question__choices')
+        ).order_by('question__order')
+
+        # Group by question for structured output
+        grouped_answers = {}
+        for answer in answers:
+            q_id = answer.question.id
+            if q_id not in grouped_answers:
+                grouped_answers[q_id] = {
+                    'question': QuestionSerializer(answer.question).data,
+                    'answers': []
+                }
+            grouped_answers[q_id]['answers'].append(
+                CallAnswerSummarySerializer(answer, context={'project': project}).data
+            )
+
+        # Convert to list for serialization
+        summary_list = list(grouped_answers.values())
+        return summary_list
+
+    def to_representation(self, instance):
+        """Ensure active questions are filtered."""
+        representation = super().to_representation(instance)
+        if 'questions' in representation:
+            representation['questions'] = [
+                q for q in representation['questions']
+            ]
+        return representation
     class Meta:
         model = Project
         fields = (
             'id', 'name', 'description', 'status', 'created_by',
             'created_by_id', 'created_at', 'updated_at', 'members',
             'contacts_count', 'calls_count', 'completed_calls_count',
-            "show"
+            "show","call_answers_summary","questions"
         )
         read_only_fields = ('created_at', 'updated_at', 'members')
 
@@ -166,7 +239,8 @@ class ContactSerializer(serializers.ModelSerializer):
             'is_active', 'created_at', 'updated_at',
             'caller_phone_number', 'created_by',
             "contact_calls_count",'contacts_calls_answered_count',
-            'contact_calls_not_answered_count','contacts_calls_rate'
+            'contact_calls_not_answered_count','contacts_calls_rate',
+            "gender","birth_date"
         )
         read_only_fields = (
             'created_at', 'updated_at', 'created_by'
@@ -390,10 +464,31 @@ class ContactSerializer(serializers.ModelSerializer):
 
         return super().update(instance, validated_data)
 
+
+
+class CallAnswerSerializer(serializers.ModelSerializer):
+    """Serializer for call answers (used internally)."""
+    question = serializers.PrimaryKeyRelatedField(queryset=Question.objects.all())
+    selected_choice = serializers.PrimaryKeyRelatedField(queryset=AnswerChoice.objects.all(), allow_null=True, required=False)
+
+    class Meta:
+        model = CallAnswer
+        fields = ['question', 'selected_choice', 'custom_answer']
+
+    def validate(self, data):
+        # Ensure question belongs to the call's project (validated in view)
+        if 'call' not in self.context:
+            raise serializers.ValidationError("Call context required.")
+        project_questions = self.context['call'].project.questions.all()
+        if data['question'] not in project_questions:
+            raise serializers.ValidationError("Question must belong to the project's questions.")
+        return data
+
 class CallSerializer(serializers.ModelSerializer):
     """
     سریالایزر برای مدل Call.
     """
+    answers = CallAnswerSerializer(many=True, required=False)
     contact = ContactSerializer(read_only=True)
     contact_id = serializers.PrimaryKeyRelatedField(
         queryset=Contact.objects.all(), source='contact', write_only=True
@@ -419,10 +514,30 @@ class CallSerializer(serializers.ModelSerializer):
             'project_id', 'call_date', 'call_result', 'status', 'notes', 'feedback',
             'detailed_report', 'duration', 'follow_up_required', 'follow_up_date',
             'is_editable', 'edited_at', 'edited_by', 'edited_by_id', 'edit_reason',
-            'original_data', 'created_at'
+            'original_data', 'created_at',
+            'answers',
         )
         read_only_fields = ('call_date', 'created_at', 'edited_at')
 
+    def create(self, validated_data):
+        answers_data = validated_data.pop('answers', [])
+        call = Call.objects.create(**validated_data)
+        for answer_data in answers_data:
+            answer_data['call'] = call
+            CallAnswer.objects.create(**answer_data)
+        return call
+
+    def validate(self, data):
+        project = data.get('project')
+        if not project:
+            raise serializers.ValidationError("Project is required.")
+        if answers_data := data.get('answers'):
+            question_ids = [a['question'].id for a in answers_data if isinstance(a['question'], Question)]
+            project_question_ids = set(project.questions.values_list('id', flat=True))
+            invalid_questions = set(question_ids) - project_question_ids
+            if invalid_questions:
+                raise serializers.ValidationError(f"Invalid questions: {list(invalid_questions)}")
+        return data
     # متد validate شما بدون تغییر باقی می‌ماند چون منطق درستی دارد
     def validate(self, data):
         # ... (کد validate شما در اینجا قرار می‌گیرد)
