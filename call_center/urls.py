@@ -35,6 +35,8 @@ urlpatterns = [
     path('main_dashboard', views.dashboard_stats, name='dashboard_data'),
     path('request-otp/', auth_views.request_otp, name='request-otp'),
     path('verify-otp/', auth_views.verify_otp, name='verify-otp'),
+    path("projects/<int:project_id>/import-contacts/", views.ContactImportView.as_view(), name="import_contacts"),
+
 ]
 
 

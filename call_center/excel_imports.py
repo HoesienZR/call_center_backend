@@ -1,9 +1,11 @@
 # call_center/excel_imports.py
 import pandas as pd
 import uuid
-from django.contrib.auth.models import User
+from django.contrib.auth import get_user_model
 from .models import Contact, Project, ProjectCaller
 from .utils import is_caller_user, clean_string_field
+
+User = get_user_model()
 
 def import_callers_from_excel(file_obj):
     """
