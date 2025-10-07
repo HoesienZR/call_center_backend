@@ -1,7 +1,6 @@
 import random
 import requests
 from django.conf import settings
-from django.core.cache import cache
 
 OTP_EXPIRY = 300        # 5 دقیقه
 OTP_REQUEST_LIMIT = 180 # 3 دقیقه
@@ -9,18 +8,22 @@ OTP_REQUEST_LIMIT = 180 # 3 دقیقه
 def generate_otp():
     return str(random.randint(100000, 999999))
 
-def store_otp(phone, otp_code):
-    cache.set(f"otp:{phone}", otp_code, timeout=OTP_EXPIRY)
-    cache.set(f"otp_limit:{phone}", True, timeout=OTP_REQUEST_LIMIT)
+def store_otp(request, phone, otp_code):
+    request.session[f"otp:{phone}"] = otp_code
+    request.session[f"otp_limit:{phone}"] = True
+    request.session.set_expiry(OTP_EXPIRY)
 
-def get_cached_otp(phone):
-    return cache.get(f"otp:{phone}")
+def get_cached_otp(request, phone):
+    return request.session.get(f"otp:{phone}")
 
-def clear_otp(phone):
-    cache.delete(f"otp:{phone}")
+def clear_otp(request, phone):
+    if f"otp:{phone}" in request.session:
+        del request.session[f"otp:{phone}"]
+    if f"otp_limit:{phone}" in request.session:
+        del request.session[f"otp_limit:{phone}"]
 
-def can_request_otp(phone):
-    return cache.get(f"otp_limit:{phone}") is None
+def can_request_otp(request, phone):
+    return f"otp_limit:{phone}" not in request.session
 
 def send_sms(phone, otp_code):
     username = settings.TSMS_USERNAME
