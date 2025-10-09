@@ -1,14 +1,26 @@
 from csv import excel
 
 from django.urls import path, include
-from rest_framework.routers import DefaultRouter
+from rest_framework.routers import DefaultRouter,NestedSimpleRouter
+from rest_framework_nested.routers import NestedSimpleRouter
 from . import views
 from . import auth_views
 
 from . import signals
+from .views import QuestionViewSet, AnswerChoiceViewSet
+
 router = DefaultRouter()
-router.register(r'users', views.UserViewSet)
+
+
+
 router.register(r'projects', views.ProjectViewSet)
+questions_router = NestedSimpleRouter(router, r'projects', lookup='project')
+questions_router.register(r'questions', QuestionViewSet, basename='project-questions')
+
+choices_router = NestedSimpleRouter(questions_router, r'questions', lookup='question')
+choices_router.register(r'choices', AnswerChoiceViewSet, basename='question-choices')
+router.register(r'users', views.UserViewSet)
+
 router.register(r'project-callers', views.ProjectCallerViewSet)
 router.register(r'contacts', views.ContactViewSet)
 router.register(r'calls', views.CallViewSet)
@@ -23,6 +35,8 @@ router.register(r'excel',views.CallExcelViewSet,basename='excel')
 
 urlpatterns = [
     path('', include(router.urls)),
+    path('', include(questions_router.urls)),
+    path('', include(choices_router.urls)),
     # Authentication URLs
     path("auth/login", auth_views.login, name="api_login"),
     path('auth/logout/', auth_views.logout, name='api_logout'),

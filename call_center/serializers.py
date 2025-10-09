@@ -1,6 +1,7 @@
 # call_center/serializers.py
 import re
 
+from django.db import transaction
 from django.db.models import Count, Prefetch
 from rest_framework import serializers
 from django.conf import settings
@@ -80,7 +81,7 @@ class CallExcelSerializer(serializers.ModelSerializer):
 
 class QuestionSerializer(serializers.ModelSerializer):
     """Serializer for questions, including choices."""
-    choices = AnswerChoiceSerializer(many=True, read_only=True)
+    choices = AnswerChoiceSerializer(many=True,read_only=True)
 
     class Meta:
         model = Question
@@ -94,7 +95,7 @@ class CallAnswerSummarySerializer(serializers.ModelSerializer):
 
     class Meta:
         model = CallAnswer
-        fields = ['question', 'selected_choice', 'custom_answer', 'choice_counts']
+        fields = ['question', 'selected_choice', 'choice_counts']
 
     def get_choice_counts(self, obj):
         # Optional: Aggregate counts for this answer's choice across the project
@@ -129,7 +130,7 @@ class ProjectSerializer(serializers.ModelSerializer):
     """
     سریالایزر برای مدل Project.
     """
-    questions = QuestionSerializer(many=True, read_only=True,)
+    questions = QuestionSerializer(many=True,)
     call_answers_summary = serializers.SerializerMethodField()
     created_by = CustomUserSerializer(read_only=True)
     created_by_id = serializers.PrimaryKeyRelatedField(
@@ -158,7 +159,7 @@ class ProjectSerializer(serializers.ModelSerializer):
             'question', 'selected_choice'
         ).prefetch_related(
             Prefetch('question__choices')
-        ).order_by('question__order')
+        )
 
         # Group by question for structured output
         grouped_answers = {}
@@ -177,6 +178,86 @@ class ProjectSerializer(serializers.ModelSerializer):
         summary_list = list(grouped_answers.values())
         return summary_list
 
+    def update(self, instance, validated_data):
+        """
+        Custom update method to handle nested questions and answer choices.
+        """
+        # Extract nested questions data
+        questions_data = validated_data.pop('questions', None)
+
+        # Update the base project instance
+        for attr, value in validated_data.items():
+            setattr(instance, attr, value)
+        instance.save()
+
+        # Handle questions and choices within a transaction
+        if questions_data is not None:
+            with transaction.atomic():
+                # Track existing question IDs in payload for updates/deletions
+                question_ids_in_payload = {q.get('id') for q in questions_data if q.get('id')}
+
+                # Update or create questions
+                for question_data in questions_data:
+                    question_id = question_data.pop('id', None)
+                    if question_id:
+                        # Update existing question
+                        question = Question.objects.get(id=question_id, project=instance)
+                        for attr, value in question_data.items():
+                            setattr(question, attr, value)
+                        question.save()
+                    else:
+                        # Create new question
+                        question = Question.objects.create(project=instance, **question_data)
+
+                    # Handle nested choices for this question
+                    self._update_choices(question, question_data.pop('choices', []))
+
+                # Optional: Delete questions not in payload (full replacement logic)
+                # existing_questions = Question.objects.filter(project=instance)
+                # for q in existing_questions:
+                #     if q.id not in question_ids_in_payload:
+                #         q.delete()
+
+        return instance
+
+    def _update_choices(self, question, choices_data):
+        """
+        Helper method to update or create answer choices for a question.
+        """
+        choice_ids_in_payload = {c.get('id') for c in choices_data if c.get('id')}
+
+        for choice_data in choices_data:
+            choice_id = choice_data.pop('id', None)
+            if choice_id:
+                # Update existing choice
+                choice = AnswerChoice.objects.get(id=choice_id, question=question)
+                for attr, value in choice_data.items():
+                    setattr(choice, attr, value)
+                choice.save()
+            else:
+                # Create new choice
+                AnswerChoice.objects.create(question=question, **choice_data)
+
+    def create(self, validated_data):
+        questions_data = validated_data.pop('questions', [])
+        # Create the project instance (created_by will be set in perform_create)
+        project = Project.objects.create(**validated_data)
+
+        # Create questions and their choices within a transaction for atomicity
+        with transaction.atomic():
+            for question_data in questions_data:
+                # Extract nested choices
+                choices_data = question_data.pop('choices', [])
+                print(questions_data)
+                # Create question linked to project
+                question = Question.objects.create(project=project, **question_data)
+                # Create choices linked to question
+                print("this is choices",choices_data)
+                for choice_data in choices_data:
+                    print(choice_data)
+                    AnswerChoice.objects.create(question=question, **choice_data)
+
+        return project
     def to_representation(self, instance):
         """Ensure active questions are filtered."""
         representation = super().to_representation(instance)
@@ -229,6 +310,7 @@ class ContactSerializer(serializers.ModelSerializer):
     contacts_calls_answered_count = serializers.SerializerMethodField()
     contact_calls_not_answered_count = serializers.SerializerMethodField()
     contacts_calls_rate = serializers.SerializerMethodField()
+
     class Meta:
         model = Contact
         fields = (
@@ -240,11 +322,12 @@ class ContactSerializer(serializers.ModelSerializer):
             'caller_phone_number', 'created_by',
             "contact_calls_count",'contacts_calls_answered_count',
             'contact_calls_not_answered_count','contacts_calls_rate',
-            "gender","birth_date"
+            "gender","birth_date",
         )
         read_only_fields = (
             'created_at', 'updated_at', 'created_by'
         )
+
     def get_contacts_calls_answered_count(self,obj):
         phone_number = obj.phone
         answered_calls = Call.objects.filter(
@@ -380,18 +463,35 @@ class ContactSerializer(serializers.ModelSerializer):
     def get_call_notes(self, obj):
         """یادداشت‌های تماس"""
         try:
-            recent_calls = obj.calls.filter(notes__isnull=False).exclude(notes='').order_by('-call_date')[:5]
+            # Eager loading for efficiency: prefetch answers and related fields
+            recent_calls = obj.calls.prefetch_related(
+                'answers__question',
+                'answers__selected_choice'
+            ).filter(
+                notes__isnull=False
+            ).exclude(
+                notes=''
+            ).order_by('-call_date')[:5]
+
             return [
                 {
                     'caller_name': call.caller.get_full_name() if call.caller else 'ناشناس',
                     'note': call.notes,
                     'created_at': call.call_date.strftime('%Y-%m-%d %H:%M') if call.call_date else '',
                     'call_result': call.get_call_result_display() if hasattr(call,
-                                                                             'get_call_result_display') else call.call_result
+                                                                             'get_call_result_display') else call.call_result,
+                    # New: List of answers with question and choice details
+                    'answers': [
+                        {
+                            'question_text': answer.question.text,
+                            'selected_choice_text': answer.selected_choice.text if answer.selected_choice else None
+                        }
+                        for answer in call.answers.all()
+                    ]
                 }
                 for call in recent_calls
             ]
-        except:
+        except Exception:  # Broad exception handling retained; consider specifying types for precision
             return []
 
     def validate(self, data):
@@ -473,16 +573,8 @@ class CallAnswerSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = CallAnswer
-        fields = ['question', 'selected_choice', 'custom_answer']
+        fields = ['question', 'selected_choice',]
 
-    def validate(self, data):
-        # Ensure question belongs to the call's project (validated in view)
-        if 'call' not in self.context:
-            raise serializers.ValidationError("Call context required.")
-        project_questions = self.context['call'].project.questions.all()
-        if data['question'] not in project_questions:
-            raise serializers.ValidationError("Question must belong to the project's questions.")
-        return data
 
 class CallSerializer(serializers.ModelSerializer):
     """
@@ -506,7 +598,6 @@ class CallSerializer(serializers.ModelSerializer):
         queryset=CustomUser.objects.all(), source='edited_by', write_only=True, allow_null=True, required=False
     )
     original_data = serializers.JSONField(required=False)
-
     class Meta:
         model = Call
         fields = (

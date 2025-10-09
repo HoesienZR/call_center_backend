@@ -15,7 +15,7 @@ from .models import (
     ExportReport,
     ContactLog,
     AnswerChoice,
-    Question,
+    Question, CallAnswer,
 
 )
 
@@ -55,12 +55,15 @@ class ProjectAdmin(admin.ModelAdmin):
     """
     تنظیمات پنل ادمین برای مدل پروژه.
     """
-    list_display = ('name', 'status', 'created_by', 'created_at')
+    list_display = ('name',"id", 'status', 'created_by', 'created_at')
     list_filter = ('status', 'created_at')
     search_fields = ('name', 'description')
     autocomplete_fields = ['created_by']
     inlines = [ProjectMembershipInline] # اضافه کردن اعضا به صورت درون‌خطی
 
+@admin.register(CallAnswer)
+class CallAnswerAdmin(admin.ModelAdmin):
+    list_display = ['call','question','selected_choice']
 
 @admin.register(ProjectMembership)
 class ProjectMembershipAdmin(admin.ModelAdmin):

@@ -12,7 +12,7 @@ class CustomUser(AbstractUser):
     """
     مدل کاربر سفارشی که شماره موبایل و اجازه ساخت پروژه را نیز شامل می‌شود.
     """
-    phone_number = models.CharField(max_length=20, unique=True, verbose_name="شماره موبایل")
+    phone_number = models.CharField(max_length=20, unique=True, verbose_name="شماره موبایل",)
     can_create_projects = models.BooleanField(default=False, verbose_name="می‌تواند پروژه بسازد")
     def __str__(self):
         return self.username
@@ -629,7 +629,6 @@ class Question(models.Model):
     """مدل برای سوالات مرتبط با پروژه"""
     project = models.ForeignKey(Project, on_delete=models.CASCADE, related_name='questions', verbose_name="پروژه")
     text = models.CharField(max_length=200, verbose_name="متن سوال")
-    order = models.PositiveIntegerField(default=0, verbose_name="ترتیب نمایش")
 
     class Meta:
         verbose_name = "سوال"
@@ -662,7 +661,6 @@ class CallAnswer(models.Model):
     call = models.ForeignKey(Call, on_delete=models.CASCADE, related_name='answers', verbose_name="تماس")
     question = models.ForeignKey(Question, on_delete=models.CASCADE, verbose_name="سوال")
     selected_choice = models.ForeignKey(AnswerChoice, on_delete=models.SET_NULL, null=True, blank=True, verbose_name="گزینه انتخاب‌شده")
-    custom_answer = models.CharField(max_length=200, blank=True, verbose_name="پاسخ سفارشی (اختیاری)")
 
     class Meta:
         unique_together = ('call', 'question')  # Prevent duplicate answers per call-question pair
@@ -671,3 +669,4 @@ class CallAnswer(models.Model):
 
     def __str__(self):
         return f"{self.call} - {self.question.text}"
+

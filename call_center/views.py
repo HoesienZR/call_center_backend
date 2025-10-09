@@ -29,7 +29,7 @@ from .serializers import (
     CustomUserSerializer, ProjectSerializer, ContactSerializer,
     CallSerializer, CallEditHistorySerializer, CallStatisticsSerializer,
     SavedSearchSerializer, UploadedFileSerializer, ExportReportSerializer, CachedStatisticsSerializer,
-    CustomUserSerializer,CallExcelSerializer
+    CustomUserSerializer, CallExcelSerializer, AnswerChoiceSerializer
 )
 from .utils import (
     validate_phone_number, normalize_phone_number, generate_secure_password,
@@ -818,22 +818,23 @@ class ContactViewSet(viewsets.ModelViewSet):
 
     def get_queryset(self):
         """
-        فیلتر کردن مخاطبین بر اساس نقش کاربر و پارامتر project_id
+        سفارشی‌سازی کوئری‌ست برای فیلتر مخاطبین بر اساس پروژه، وضعیت تماس و دسترسی کاربر.
         """
-        bs_queryset = self.queryset
+        queryset = self.queryset  # e.g., Contact.objects.all()
         user = self.request.user
-        call_status =  self.request.query_params.get("status")
+        print("queryset",queryset)
+        status_filter = self.request.query_params.get("status")  # Use 'status', not 'call_status'
         project_id = self.request.query_params.get('project_id')
-        contacts = []
-        # اگر project_id مشخص شده، فقط مخاطبین آن پروژه را برگردان
+        print(project_id)
         if project_id:
             try:
                 project = Project.objects.get(id=project_id)
-                # بررسی دسترسی کاربر به پروژه
+                print("project :",project)
                 if not (user.is_superuser or ProjectMembership.objects.filter(
                         project=project, user=user
                 ).exists()):
                     return Contact.objects.none()
+
                 # بررسی نقش کاربر در پروژه
                 is_admin = ProjectMembership.objects.filter(
                     project=project, user=user, role='admin'
@@ -841,48 +842,57 @@ class ContactViewSet(viewsets.ModelViewSet):
 
                 if user.is_superuser or is_admin:
                     # ادمین همه مخاطبین پروژه را می‌بیند
-                    contacts= bs_queryset.filter(
-                        project=project,
-
-                    ).select_related('assigned_caller', 'project')
+                    contacts_qs = queryset.filter(project=project)
                 else:
-                    # تماس‌گیرنده فقط مخاطبین تخصیص یافته به خودش را می‌بیند
-                    contacts =  bs_queryset.filter(
+                    # تماس‌گیرنده فقط مخاطبین تخصیص‌یافته به خودش را می‌بیند
+                    contacts_qs = queryset.filter(
                         project=project,
-                        assigned_caller=user,
-                        call_status="pending"
-                    ).select_related('assigned_caller', 'project')
-                if call_status:
-                    return contacts.filter(call_status=call_status)
-                return contacts
+                        assigned_caller=user
+                    )
+                print(contacts_qs)
+                contacts_qs = contacts_qs.prefetch_related(
+                    'calls__answers__selected_choice',
+                    'calls__answers__question',
+                    'assigned_caller',
+                    'project'
+                )
+                # Filter on call status if provided (via relation)
+                if status_filter:
+                    contacts_qs = contacts_qs.filter(calls__status=status_filter)
+                    print(contacts_qs)
+                return contacts_qs
+
             except Project.DoesNotExist:
                 return Contact.objects.none()
 
         # اگر project_id مشخص نشده، پردازش عادی
         if user.is_superuser:
-            return Contact.objects.all()
-
-        user_projects = Project.objects.filter(members=user)
-        is_admin_in_any_project = ProjectMembership.objects.filter(
-            project__in=user_projects,
-            user=user,
-            role='admin'
-        ).exists()
-
-        if is_admin_in_any_project:
-            contacts =  Contact.objects.filter(
-                project__in=user_projects,
-
-
-            )
+            contacts_qs = queryset.all()
         else:
-            contacts =  Contact.objects.filter(
-                assigned_caller=user,
-            )
-            if call_status:
-                return contacts.filter(call_status=call_status)
-            return contacts
+            user_projects = Project.objects.filter(members=user)
+            is_admin_in_any_project = ProjectMembership.objects.filter(
+                project__in=user_projects,
+                user=user,
+                role='admin'
+            ).exists()
 
+            if is_admin_in_any_project:
+                contacts_qs = queryset.filter(project__in=user_projects)
+            else:
+                contacts_qs = queryset.filter(assigned_caller=user)
+
+            # Eager loading (applied globally)
+            contacts_qs = contacts_qs.prefetch_related(
+                'calls__answers__selected_choice',
+                'calls__answers__question',
+                'assigned_caller',
+                'project'
+            )
+
+        # Filter on call status if provided
+        if status_filter:
+            contacts_qs = contacts_qs.filter(calls__status=status_filter)
+        return contacts_qs
     def perform_create(self, serializer):
         """
         ثبت مخاطب جدید با اعمال منطق تخصیص
@@ -1442,28 +1452,36 @@ class CallViewSet(viewsets.ModelViewSet):
         contact_id = request.data.get('callecaller_id') or request.data.get('contact_id')
         project_id = request.data.get('project_id')
 
+
         if not contact_id:
             return Response({"error": "contact_id الزامی است"}, status=400)
 
         try:
+            print(contact_id)
             contact = Contact.objects.get(id=contact_id)
+            print("contact")
             project = Project.objects.get(id=project_id) if project_id else None
+            print("project")
         except (Contact.DoesNotExist, Project.DoesNotExist):
             return Response({"error": "Contact یا Project یافت نشد"}, status=404)
 
-        call = Call.objects.create(
-            contact=contact,
-            caller=request.user,
-            project=project,
-            status=request.data.get('status', 'completed'),
-            call_result=request.data.get('call_result'),
-            notes=request.data.get('notes', ''),
-            duration=request.data.get('duration', 0),
-            follow_up_required=request.data.get('call_result') == 'callback_requested',
-            follow_up_date=request.data.get('follow_up_date'),
-        )
+        serializer_data = { "contact":contact_id,
+            "caller_id":request.user.id,
+            "project":project_id,
+            "status":request.data.get('status', 'completed'),
+            "call_result":request.data.get('call_result'),
+            "notes":request.data.get('notes', ''),
+            "duration":request.data.get('duration', 0),
+            "follow_up_required":request.data.get('call_result') == 'callback_requested',
+            "follow_up_date":request.data.get('follow_up_date'),
+        }
+        serializer_data.update({k: v for k, v in request.data.items() if k not in serializer_data})
+        call_serializer = CallSerializer(data=serializer_data)
+        if call_serializer.is_valid(raise_exception=True):
+            call_serializer.save(caller_id=self.request.user.id)
+            return Response(call_serializer.data, status=status.HTTP_201_CREATED)
 
-        return Response(CallSerializer(call).data, status=201)
+        return Response(call_serializer.errors, status=status.HTTP_400_BAD_REQUEST)
     @action(detail=True, methods=["post"], permission_classes=[IsAuthenticated])
     def edit_call(self, request, pk=None):
         call = self.get_object()
@@ -2204,3 +2222,53 @@ def dashboard_stats(request):
               "pending_calls_count":pending_calls_count,
     }
     return Response(result,status=status.HTTP_200_OK)
+
+from rest_framework import viewsets
+from rest_framework.permissions import IsAuthenticated
+from django.db.models import Prefetch
+from .models import Question, AnswerChoice  # Adjust imports as needed
+from .serializers import QuestionSerializer  # Assumes writable serializer with nested choices
+
+class QuestionViewSet(viewsets.ModelViewSet):
+    """
+    ViewSet for managing questions associated with a project.
+    """
+    serializer_class = QuestionSerializer
+    permission_classes = [IsAuthenticated,IsProjectAdmin|IsAdminUser]  # Customize, e.g., add IsProjectAdmin
+
+    def get_queryset(self):
+        """
+        Retrieve questions for the specific project from the URL.
+        """
+        project_id = self.kwargs['project_pk']
+        return Question.objects.filter(project_id=project_id).prefetch_related(
+            Prefetch('choices', queryset=AnswerChoice.objects.all())
+        )
+
+    def perform_create(self, serializer):
+        """
+        Automatically link the created question to the project.
+        """
+        project_id = self.kwargs['project_pk']
+        serializer.save(project_id=project_id)
+
+class AnswerChoiceViewSet(viewsets.ModelViewSet):
+    """
+    ViewSet for managing answer choices associated with a question.
+    """
+    serializer_class = AnswerChoiceSerializer  # Writable serializer
+    permission_classes = [IsAuthenticated,IsProjectAdmin|IsAdminUser]
+
+    def get_queryset(self):
+        """
+        Retrieve answer choices for the specific question from the URL.
+        """
+        question_id = self.kwargs['question_pk']
+        return AnswerChoice.objects.filter(question_id=question_id)
+
+    def perform_create(self, serializer):
+        """
+        Automatically link the created answer choice to the question.
+        """
+        question_id = self.kwargs['question_pk']
+        serializer.save(question_id=question_id)
