@@ -15,9 +15,14 @@ from .models import (
     ExportReport,
     ContactLog,
     AnswerChoice,
-    Question, CallAnswer,
+    Question, CallAnswer,Ticket
 
 )
+@admin.register(Ticket)
+class TicketAdmin(admin.ModelAdmin):
+    list_display = ['title','created_at','user',]
+    list_filter = ['done']
+    search_fields = ['title','description']
 
 # 1. سفارشی‌سازی پنل ادمین برای مدل CustomUser
 @admin.register(CustomUser)

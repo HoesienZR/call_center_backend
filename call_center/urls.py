@@ -30,6 +30,8 @@ router.register(r'saved-searches', views.SavedSearchViewSet)
 router.register(r'uploaded-files', views.UploadedFileViewSet)
 router.register(r'export-reports', views.ExportReportViewSet)
 router.register(r'cached-statistics', views.CachedStatisticsViewSet)
+
+router.register(r"tickets",views.TicketViewSet)
 router.register(r'excel',views.CallExcelViewSet,basename='excel')
 
 

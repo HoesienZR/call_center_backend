@@ -16,7 +16,7 @@ from .models import (
     SavedSearch,
     UploadedFile,
     ExportReport,
-    CachedStatistics, Question, AnswerChoice, CallAnswer,
+    CachedStatistics, Question, AnswerChoice, CallAnswer, Ticket,
 )
 from rest_framework import serializers
 # 1. سریالایزر برای مدل کاربر سفارشی
@@ -285,6 +285,10 @@ class ProjectSerializer(serializers.ModelSerializer):
 from rest_framework import serializers
 from .models import Contact, Project, CustomUser, ProjectMembership  # ProjectMembership را اضافه کنید
 
+class TicketSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Ticket
+        fields = ("title", "description","")
 
 class ContactSerializer(serializers.ModelSerializer):
     """

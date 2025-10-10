@@ -29,7 +29,7 @@ from .serializers import (
     CustomUserSerializer, ProjectSerializer, ContactSerializer,
     CallSerializer, CallEditHistorySerializer, CallStatisticsSerializer,
     SavedSearchSerializer, UploadedFileSerializer, ExportReportSerializer, CachedStatisticsSerializer,
-    CustomUserSerializer, CallExcelSerializer, AnswerChoiceSerializer
+    CustomUserSerializer, CallExcelSerializer, AnswerChoiceSerializer,TicketSerializer
 )
 from .utils import (
     validate_phone_number, normalize_phone_number, generate_secure_password,
@@ -2272,3 +2272,7 @@ class AnswerChoiceViewSet(viewsets.ModelViewSet):
         """
         question_id = self.kwargs['question_pk']
         serializer.save(question_id=question_id)
+
+class TicketViewSet(viewsets.ModelViewSet):
+    serializer_class = TicketSerializer
+    permission_classes =[IsAuthenticated]
