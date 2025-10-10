@@ -7,6 +7,7 @@ from rest_framework.permissions import AllowAny
 from django.contrib.auth import authenticate
 from .models import CustomUser as User
 from .serializers import CustomUserSerializer
+from .services import otp_service
 
 
 class CustomAuthToken(ObtainAuthToken):
@@ -169,3 +170,54 @@ def register(request):
             'error': f'خطا در ایجاد کاربر: {str(e)}'
         }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
+
+@api_view(['POST'])
+@permission_classes([AllowAny])
+def request_otp(request):
+    phone = request.data.get('phone')
+    if not phone:
+        return Response({"error": "شماره تلفن الزامی است"}, status=status.HTTP_400_BAD_REQUEST)
+
+    if not User.objects.filter(phone_number=phone).exists():
+        return Response({"error": "کاربری با این شماره یافت نشد"}, status=status.HTTP_404_NOT_FOUND)
+
+    if not otp_service.can_request_otp(request, phone):
+        return Response({"error": "کد قبلی هنوز معتبر است. بعداً تلاش کنید."}, status=status.HTTP_429_TOO_MANY_REQUESTS)
+
+    otp_code = otp_service.generate_otp()
+    otp_service.store_otp(request, phone, otp_code)
+
+    # اگر SMS واقعی داری:
+    if otp_service.send_sms(phone, otp_code):
+        return Response({"message": "کد OTP ارسال شد"}, status=status.HTTP_200_OK)
+
+    return Response({"message": "کد OTP (تست): " + otp_code}, status=status.HTTP_200_OK)
+
+
+@api_view(['POST'])
+@permission_classes([AllowAny])
+def verify_otp(request):
+    phone = request.data.get('phone')
+    otp_code = request.data.get('otp')
+
+    if not phone or not otp_code:
+        return Response({"error": "شماره تلفن و OTP الزامی است"}, status=status.HTTP_400_BAD_REQUEST)
+
+    cached_otp = otp_service.get_cached_otp(request, phone)
+    if not cached_otp or cached_otp != otp_code:
+        return Response({"error": "OTP نامعتبر یا منقضی شده"}, status=status.HTTP_400_BAD_REQUEST)
+
+    try:
+        user = User.objects.get(phone_number=phone)
+        otp_service.clear_otp(request, phone)
+        token, _ = Token.objects.get_or_create(user=user)
+
+        return Response({
+            "token": token.key,
+            "user_id": user.pk,
+            "username": user.username,
+            "phone": user.phone_number
+        }, status=status.HTTP_200_OK)
+
+    except User.DoesNotExist:
+        return Response({"error": "کاربر یافت نشد"}, status=status.HTTP_404_NOT_FOUND)
