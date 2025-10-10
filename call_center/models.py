@@ -5,7 +5,8 @@ from django.conf import settings
 from django.core.exceptions import ValidationError
 import json
 from datetime import datetime, timedelta
-from django_jalali.db import models as jmodels
+from django.utils import timezone
+
 
 # 1. مدل کاربر سفارشی با فیلد شماره موبایل و اجازه ساخت پروژه
 class CustomUser(AbstractUser):
@@ -189,6 +190,7 @@ class Contact(models.Model):
         ('no_answer', 'پاسخ نداد'),
         ('pending', 'در حال انتظار')
     ]
+    is_special = models.BooleanField(default=False)
     GENDER_CHOICES = [
         ('male','مرد'),
         ("female","زن"),

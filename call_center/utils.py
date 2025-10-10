@@ -1,6 +1,9 @@
 import re
 import random
 from django.contrib.auth.models import User
+from .models import Contact, ProjectCaller
+from django.db.models import Count
+
 import string
 
 def validate_phone_number(phone):
