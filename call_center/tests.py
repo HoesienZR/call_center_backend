@@ -3,8 +3,6 @@ from django.contrib.auth.models import User
 from rest_framework.test import APIClient
 from rest_framework.authtoken.models import Token
 from rest_framework import status
-from .models import Project, Contact, Call, ProjectCaller
-
 
 class AuthenticationTestCase(TestCase):
     """تست‌های سیستم احراز هویت"""
@@ -194,3 +192,64 @@ class ContactAPITestCase(TestCase):
         response = self.client.post('/api/contacts/request_new_call/')
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertIn('id', response.data)
+
+
+
+# call_center/tests.py
+from django.test import TestCase
+from django.contrib.auth.models import User
+from io import BytesIO
+import pandas as pd
+
+from .models import Project, Contact, ProjectCaller
+from .excel_imports import import_callers_from_excel, import_contacts_from_excel
+
+class ExcelImportTestCase(TestCase):
+
+    def setUp(self):
+        # ایجاد پروژه تستی
+        self.project = Project.objects.create(name="Test Project", created_by=User.objects.create(username="admin"))
+
+    def test_import_callers_and_contacts(self):
+        # ساخت فایل اکسل تماس‌گیرندگان در حافظه
+        callers_data = pd.DataFrame({
+            "username": ["caller1", "caller2"],
+            "first_name": ["Ali", "Sara"],
+            "last_name": ["Ahmadi", "Mohammadi"],
+            "phone": ["09120000001", "09120000002"]
+        })
+        callers_file = BytesIO()
+        callers_data.to_excel(callers_file, index=False)
+        callers_file.seek(0)
+
+        created_callers = import_callers_from_excel(callers_file)
+        self.assertIn("caller1", created_callers)
+        self.assertIn("caller2", created_callers)
+
+        # بررسی اینکه کاربران در دیتابیس ساخته شده‌اند
+        caller1 = User.objects.get(username="caller1")
+        caller2 = User.objects.get(username="caller2")
+        self.assertEqual(caller1.first_name, "Ali")
+        self.assertEqual(caller2.first_name, "Sara")
+
+        # ساخت فایل اکسل مخاطبین در حافظه
+        contacts_data = pd.DataFrame({
+            "full_name": ["Ali Reza", "Sara Ahmadi"],
+            "phone": ["09331000001", "09331000002"],
+            "assigned_caller_username": ["caller1", "caller2"]
+        })
+        contacts_file = BytesIO()
+        contacts_data.to_excel(contacts_file, index=False)
+        contacts_file.seek(0)
+
+        created_contacts = import_contacts_from_excel(contacts_file, self.project)
+        self.assertIn("09331000001", created_contacts)
+        self.assertIn("09331000002", created_contacts)
+
+        # بررسی اینکه مخاطبین به درستی ساخته شده‌اند و اختصاص داده شده‌اند
+        ali = Contact.objects.get(phone="09331000001")
+        sara = Contact.objects.get(phone="09331000002")
+        self.assertEqual(ali.full_name, "Ali Reza")
+        self.assertEqual(ali.assigned_caller, caller1)
+        self.assertEqual(sara.assigned_caller, caller2)
+        self.assertEqual(sara.full_name, "Sara Ahmadi")

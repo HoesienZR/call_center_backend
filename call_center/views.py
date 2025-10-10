@@ -35,6 +35,11 @@ from .utils import (
     validate_phone_number, normalize_phone_number, generate_secure_password,
     is_caller_user, assign_contacts_randomly, validate_excel_data, clean_string_field,generate_username
 )
+import traceback
+from rest_framework.views import APIView
+from rest_framework import status, permissions
+from .excel_imports import import_contacts_from_excel
+
 
 # تنظیم logger
 logger = logging.getLogger(__name__)
@@ -2223,6 +2228,45 @@ def dashboard_stats(request):
     }
     return Response(result,status=status.HTTP_200_OK)
 
+
+
+class ContactImportView(APIView):
+    """
+    ایمپورت مخاطبین از فایل اکسل برای یک پروژه خاص
+    """
+    permission_classes = [permissions.IsAuthenticated, permissions.IsAdminUser]
+
+    def post(self, request, project_id):
+        """
+        آپلود فایل اکسل و افزودن مخاطبین جدید.
+        اگر تماس‌گیرنده وجود داشته باشد، اختصاص داده می‌شود.
+        """
+        project = get_object_or_404(Project, id=project_id)
+        file_obj = request.FILES.get("file")
+
+        if not file_obj:
+            return Response(
+                {"error": "فایل اکسل ارسال نشده است."},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        try:
+            created_contacts = import_contacts_from_excel(file_obj, project)
+            return Response(
+                {
+                    "message": f"{len(created_contacts)} مخاطب با موفقیت اضافه شد.",
+                    "created_count": len(created_contacts),
+                    "project": project.name,
+                },
+                status=status.HTTP_201_CREATED
+            )
+
+        except Exception as e:
+            traceback.print_exc()
+            return Response(
+                {"error": f"خطا در پردازش فایل: {str(e)}"},
+                status=status.HTTP_400_BAD_REQUEST
+            )
 from rest_framework import viewsets
 from rest_framework.permissions import IsAuthenticated
 from django.db.models import Prefetch

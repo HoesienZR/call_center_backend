@@ -14,9 +14,16 @@ from email.policy import default
 from pathlib import Path
 import dj_database_url
 from dotenv import load_dotenv
+from decouple import config
 
 
 load_dotenv()
+
+# TSMS configuration
+TSMS_USERNAME = config('TSMS_USERNAME')
+TSMS_PASSWORD = config('TSMS_PASSWORD')
+TSMS_FROM_NUMBER = config('TSMS_FROM_NUMBER')
+
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
 
@@ -170,7 +177,6 @@ CELERY_BEAT_SCHEDULE = {
         'schedule': 3600.0,  # هر ساعت چک کن (3600 ثانیه)
     },
 }
-# other codes ...
 
 DATABASES = {
   'default': dj_database_url.config(default=os.environ.get("DATABASE_URL")),

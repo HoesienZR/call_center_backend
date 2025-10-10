@@ -325,7 +325,7 @@ class ContactSerializer(serializers.ModelSerializer):
             'is_active', 'created_at', 'updated_at',
             'caller_phone_number', 'created_by',
             "contact_calls_count",'contacts_calls_answered_count',
-            'contact_calls_not_answered_count','contacts_calls_rate',
+            'contact_calls_not_answered_count','contacts_calls_rate', "is_special",
             "gender","birth_date",
         )
         read_only_fields = (
