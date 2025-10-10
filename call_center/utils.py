@@ -4,6 +4,7 @@ from django.contrib.auth.models import User
 from .models import Contact, ProjectCaller
 from django.db.models import Count
 
+import string
 
 def validate_phone_number(phone):
     """
@@ -50,12 +51,19 @@ def normalize_phone_number(phone):
 
     return phone
 
+def generate_username(phone):
+    random_letters = random.choice((string.punctuation))+phone
+
+    for _ in range(4):
+        random_letters += random.choice(string.ascii_letters)
+    return random_letters
+
 
 def generate_secure_password(length=12):
     """
     تولید رمز عبور امن
     """
-    import string
+
     characters = string.ascii_letters + string.digits + "!@#$%^&*"
     return ''.join(random.choice(characters) for _ in range(length))
 

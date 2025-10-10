@@ -14,7 +14,15 @@ from .models import (
     UploadedFile,
     ExportReport,
     ContactLog,
+    AnswerChoice,
+    Question, CallAnswer,Ticket
+
 )
+@admin.register(Ticket)
+class TicketAdmin(admin.ModelAdmin):
+    list_display = ['title','created_at','user',]
+    list_filter = ['done']
+    search_fields = ['title','description']
 
 # 1. سفارشی‌سازی پنل ادمین برای مدل CustomUser
 @admin.register(CustomUser)
@@ -52,12 +60,15 @@ class ProjectAdmin(admin.ModelAdmin):
     """
     تنظیمات پنل ادمین برای مدل پروژه.
     """
-    list_display = ('name', 'status', 'created_by', 'created_at')
+    list_display = ('name',"id", 'status', 'created_by', 'created_at')
     list_filter = ('status', 'created_at')
     search_fields = ('name', 'description')
     autocomplete_fields = ['created_by']
     inlines = [ProjectMembershipInline] # اضافه کردن اعضا به صورت درون‌خطی
 
+@admin.register(CallAnswer)
+class CallAnswerAdmin(admin.ModelAdmin):
+    list_display = ['call','question','selected_choice']
 
 @admin.register(ProjectMembership)
 class ProjectMembershipAdmin(admin.ModelAdmin):
@@ -69,13 +80,22 @@ class ProjectMembershipAdmin(admin.ModelAdmin):
     search_fields = ('project__name', 'user__username')
     autocomplete_fields = ['project', 'user']
 
+@admin.register(AnswerChoice)
+class AnswerChoiceAdmin(admin.ModelAdmin):
+    list_display = ['question',"text"]
+
+@admin.register(Question)
+class QuestionAdmin(admin.ModelAdmin):
+    list_display = ["text"]
+
+
 
 @admin.register(Contact)
 class ContactAdmin(admin.ModelAdmin):
     """
     تنظیمات پنل ادمین برای مدل مخاطب.
     """
-    list_display = ('full_name', 'phone', 'project', 'call_status', 'assigned_caller', 'last_call_date')
+    list_display = ('full_name', 'phone', 'project', 'call_status', 'assigned_caller', 'last_call_date',"birth_date","gender")
     list_filter = ('project', 'call_status', 'is_active')
     search_fields = ('full_name', 'phone', 'email', 'project__name')
     # برای بهبود عملکرد، فیلدهای سنگین را در لیست نمایش ندهید
