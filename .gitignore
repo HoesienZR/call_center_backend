@@ -11,7 +11,7 @@ static_collected/
 # Virtual Environment
 .env
 venv/
-env/
+.env/
 
 # IDE-specific files (e.g., PyCharm, VS Code)
 .idea/

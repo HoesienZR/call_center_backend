@@ -1,4 +1,4 @@
-#!/usr/bin/env python3
+#!/usr/bin/.env python3
 """
 تست جامع برای سیستم Call Center Backend
 """

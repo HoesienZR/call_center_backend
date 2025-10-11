@@ -130,7 +130,7 @@ class ProjectSerializer(serializers.ModelSerializer):
     """
     سریالایزر برای مدل Project.
     """
-    questions = QuestionSerializer(many=True,)
+    questions = QuestionSerializer(many=True,read_only=True)
     call_answers_summary = serializers.SerializerMethodField()
     created_by = CustomUserSerializer(read_only=True)
     created_by_id = serializers.PrimaryKeyRelatedField(
