@@ -75,12 +75,15 @@ def import_contacts_from_excel(file_obj, project: Project):
         if assigned_caller_username:
             try:
                 caller = User.objects.get(username=assigned_caller_username)
-                if is_caller_user(caller):   # مطمئن شو نقش caller داره
+                if is_caller_user(caller):
                     contact.assigned_caller = caller
+                    contact.is_special = True  # ✅ یعنی از اکسل با تماس‌گیرنده آمده
             except User.DoesNotExist:
-                contact.assigned_caller = None  # اگر نبود → بدون تماس‌گیرنده
+                contact.assigned_caller = None
+                contact.is_special = False
         else:
-            contact.assigned_caller = None      # اگر ستون خالی بود → بدون تماس‌گیرنده
+            contact.assigned_caller = None
+            contact.is_special = False      # اگر ستون خالی بود → بدون تماس‌گیرنده
 
         contact.save()
         created_contacts.append(contact.phone)
