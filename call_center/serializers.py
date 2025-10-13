@@ -1,6 +1,6 @@
 # call_center/serializers.py
 import re
-
+from persiantools.jdatetime import JalaliDate
 from django.db import transaction
 from django.db.models import Count, Prefetch
 from rest_framework import serializers
@@ -24,16 +24,20 @@ class CustomUserSerializer(serializers.ModelSerializer):
     """
     سریالایزر برای مدل CustomUser که شامل فیلدهای سفارشی است.
     """
+    persian_date_joined = serializers.SerializerMethodField()
     class Meta:
         model = CustomUser
         fields = (
             'id', 'username', 'email', 'first_name', 'last_name',
             'is_staff', 'is_active', 'date_joined', 'last_login',
-            'phone_number', 'can_create_projects','phone_number'
+            'phone_number', 'can_create_projects','phone_number',
+            'persian_date_joined'
         )
         read_only_fields = (
             'is_staff', 'is_active', 'date_joined', 'last_login'
         )
+    def get_persian_date_joined(self, obj):
+        return str(JalaliDate((obj.date_joined.date())))
 # your_app/serializers.py
 from rest_framework import serializers
 from .models import Call, Contact, Project, ProjectMembership
@@ -43,41 +47,6 @@ class AnswerChoiceSerializer(serializers.ModelSerializer):
     class Meta:
         model = AnswerChoice
         fields = ['id', 'text']
-class CallExcelSerializer(serializers.ModelSerializer):
-    contact_name = serializers.CharField(source='contact.full_name', read_only=True)
-    contact_phone = serializers.CharField(source='contact.phone', read_only=True)
-    project_name = serializers.CharField(source='project.name', read_only=True)
-    caller_phone = serializers.SerializerMethodField()
-    call_result_display = serializers.CharField(source='get_call_result_display', read_only=True)
-    call_status_display = serializers.CharField(source='get_status_display', read_only=True)
-    custom_fields = serializers.SerializerMethodField()
-    caller_name = serializers.CharField(source='caller.get_full_name', read_only=True)
-    address = serializers.CharField(source="contact.address", read_only=True)
-    class Meta:
-        model = Call
-        fields = [
-            "caller_name",
-            'contact_name',
-            'contact_phone',
-            'project_name',
-            'caller_phone',
-            'call_result_display',
-            'call_status_display',
-            'notes',
-            'duration',
-            'call_date',
-            'custom_fields',
-            "address"
-        ]
-
-    def get_caller_phone(self, obj):
-        # فرض می‌کنیم مدل User یک فیلد پروفایل دارد که شماره تماس در آن ذخیره شده است
-        return obj.caller.phone_number
-
-    def get_custom_fields(self, obj):
-        # دریافت فیلدهای سفارشی از مدل Contact
-        return obj.contact.custom_fields
-# 2. سریالایزر برای مدیریت نقش کاربران در پروژه
 
 class QuestionSerializer(serializers.ModelSerializer):
     """Serializer for questions, including choices."""
@@ -143,7 +112,9 @@ class ProjectSerializer(serializers.ModelSerializer):
     contacts_count = serializers.IntegerField(source='contacts.count', read_only=True)
     calls_count = serializers.IntegerField(source='calls.count', read_only=True)
     completed_calls_count = serializers.SerializerMethodField()
-    project_statistics = serializers.SerializerMethodField
+    project_statistics = serializers.SerializerMethodField()
+    persian_updated_at = serializers.SerializerMethodField()
+    persian_created_at = serializers.SerializerMethodField()
     def get_project_statistics(self,obj):
         return obj.get_statistics()
     def get_completed_calls_count(self, obj):
@@ -272,9 +243,14 @@ class ProjectSerializer(serializers.ModelSerializer):
             'id', 'name', 'description', 'status', 'created_by',
             'created_by_id', 'created_at', 'updated_at', 'members',
             'contacts_count', 'calls_count', 'completed_calls_count',
-            "show","call_answers_summary","questions"
+            "show","call_answers_summary","questions",'persian_updated_at'
+            ,'persian_created_at','project_statistics'
         )
         read_only_fields = ('created_at', 'updated_at', 'members')
+    def get_persian_updated_at(self,obj):
+        return str(JalaliDate(obj.updated_at.date()))
+    def get_persian_created_at(self,obj):
+        return str(JalaliDate(obj.created_at.date()))
 
 
 # 4. سریالایزر مخاطبین
@@ -288,7 +264,7 @@ from .models import Contact, Project, CustomUser, ProjectMembership  # ProjectMe
 class TicketSerializer(serializers.ModelSerializer):
     class Meta:
         model = Ticket
-        fields = ("title", "description","")
+        fields = ("title", "description",)
 
 class ContactSerializer(serializers.ModelSerializer):
     """
@@ -314,7 +290,8 @@ class ContactSerializer(serializers.ModelSerializer):
     contacts_calls_answered_count = serializers.SerializerMethodField()
     contact_calls_not_answered_count = serializers.SerializerMethodField()
     contacts_calls_rate = serializers.SerializerMethodField()
-
+    persian_updated_at = serializers.SerializerMethodField(read_only=True)
+    persian_created_by = serializers.SerializerMethodField(read_only=True)
     class Meta:
         model = Contact
         fields = (
@@ -326,11 +303,15 @@ class ContactSerializer(serializers.ModelSerializer):
             'caller_phone_number', 'created_by',
             "contact_calls_count",'contacts_calls_answered_count',
             'contact_calls_not_answered_count','contacts_calls_rate', "is_special",
-            "gender","birth_date",
+            "gender","birth_date",'persian_created_by','persian_updated_at'
         )
         read_only_fields = (
             'created_at', 'updated_at', 'created_by'
         )
+    def get_persian_updated_at(self,obj):
+        return str(JalaliDate(obj.updated_at.date()))
+    def get_persian_created_by(self,obj):
+        return str(JalaliDate(obj.created_at.date()))
 
     def get_contacts_calls_answered_count(self,obj):
         phone_number = obj.phone
@@ -379,11 +360,12 @@ class ContactSerializer(serializers.ModelSerializer):
             phone_number = obj.phone
             calls = Call.objects.filter(contact__phone=phone_number).filter(notes__isnull=False).exclude(
                 notes='').order_by('-call_date')
+
             return [
                 {
                     'caller_name': call.caller.get_full_name() if call.caller else 'ناشناس',
                     'note': call.notes,
-                    'created_at': call.call_date.strftime('%Y-%m-%d %H:%M') if call.call_date else '',
+                    'created_at': str(JalaliDate(call.created_at.date())),
                     'call_result': call.get_call_result_display() if hasattr(call,
                                                                              'get_call_result_display') else call.call_result
                 }
@@ -481,7 +463,7 @@ class ContactSerializer(serializers.ModelSerializer):
                 {
                     'caller_name': call.caller.get_full_name() if call.caller else 'ناشناس',
                     'note': call.notes,
-                    'created_at': call.call_date.strftime('%Y-%m-%d %H:%M') if call.call_date else '',
+                    'created_at':  str(JalaliDate(call.call_date.date())),
                     'call_result': call.get_call_result_display() if hasattr(call,
                                                                              'get_call_result_display') else call.call_result,
                     # New: List of answers with question and choice details
@@ -573,11 +555,12 @@ class ContactSerializer(serializers.ModelSerializer):
 class CallAnswerSerializer(serializers.ModelSerializer):
     """Serializer for call answers (used internally)."""
     question = serializers.PrimaryKeyRelatedField(queryset=Question.objects.all())
+    question_text = serializers.CharField(source='question.text', read_only=True)
     selected_choice = serializers.PrimaryKeyRelatedField(queryset=AnswerChoice.objects.all(), allow_null=True, required=False)
-
+    selected_choice_text = serializers.CharField(source='selected_choice.text', read_only=True)
     class Meta:
         model = CallAnswer
-        fields = ['question', 'selected_choice',]
+        fields = ['question', 'selected_choice','question_text','selected_choice_text',"question_text",'selected_choice_text']
 
 
 class CallSerializer(serializers.ModelSerializer):
@@ -601,6 +584,7 @@ class CallSerializer(serializers.ModelSerializer):
     edited_by_id = serializers.PrimaryKeyRelatedField(
         queryset=CustomUser.objects.all(), source='edited_by', write_only=True, allow_null=True, required=False
     )
+    persian_call_date = serializers.SerializerMethodField()
     original_data = serializers.JSONField(required=False)
     class Meta:
         model = Call
@@ -609,11 +593,13 @@ class CallSerializer(serializers.ModelSerializer):
             'project_id', 'call_date', 'call_result', 'status', 'notes', 'feedback',
             'detailed_report', 'duration', 'follow_up_required', 'follow_up_date',
             'is_editable', 'edited_at', 'edited_by', 'edited_by_id', 'edit_reason',
-            'original_data', 'created_at',
+            'original_data',
             'answers',
+            'persian_call_date'
         )
         read_only_fields = ('call_date', 'created_at', 'edited_at')
-
+    def get_persian_call_date(self,obj):
+        return str(JalaliDate(obj.call_date.date()))
     def create(self, validated_data):
         answers_data = validated_data.pop('answers', [])
         call = Call.objects.create(**validated_data)
@@ -732,3 +718,62 @@ class ProjectStatisticsSerializer(serializers.Serializer):
     project_name = serializers.CharField()
     general_statistics = GeneralStatisticsSerializer()
     caller_performance = CallerPerformanceSerializer(many=True)
+class CallExcelSerializer(serializers.ModelSerializer):
+    contact_name = serializers.CharField(source='contact.full_name', read_only=True)
+    contact_phone = serializers.CharField(source='contact.phone', read_only=True)
+    project_name = serializers.CharField(source='project.name', read_only=True)
+    contact_gender = serializers.CharField(source='contact.gender', read_only=True)
+    special_contact = serializers.CharField(source='contact.is_special', read_only=True)
+    contact_birth_date = serializers.CharField(source='contact.birth_date', read_only=True)
+    caller_phone = serializers.SerializerMethodField()
+    call_result_display = serializers.CharField(source='get_call_result_display', read_only=True)
+    call_status_display = serializers.CharField(source='get_status_display', read_only=True)
+    custom_fields = serializers.SerializerMethodField()
+    caller_name = serializers.CharField(source='caller.get_full_name', read_only=True)
+    address = serializers.CharField(source="contact.address", read_only=True)
+    answers =serializers.SerializerMethodField()
+    persian_date = serializers.SerializerMethodField()
+    class Meta:
+        model = Call
+        fields = [
+            "caller_name",
+            'contact_name',
+            'contact_phone',
+            "contact_gender",
+            "special_contact",
+            "contact_birth_date",
+            'project_name',
+            'caller_phone',
+            'call_result_display',
+            'call_status_display',
+            'notes',
+            'duration',
+            'call_date',
+            "persian_date",
+            'custom_fields',
+            "address",
+            "answers",
+
+        ]
+    def get_persian_date(self,obj):
+        return str(JalaliDate(obj.call_date.date()))
+
+    def get_caller_phone(self, obj):
+        # فرض می‌کنیم مدل User یک فیلد پروفایل دارد که شماره تماس در آن ذخیره شده است
+        return obj.caller.phone_number
+
+    def get_custom_fields(self, obj):
+        # دریافت فیلدهای سفارشی از مدل Contact
+        return obj.contact.custom_fields
+
+    def get_answers(self, obj):
+        # Assuming Call has a related manager to CallAnswer instances, e.g., callanswer_set
+        # Adjust the related_name if necessary based on your model's ForeignKey definition
+        formatted_answers = []
+        for answer in obj.answers.all():
+            # Replace 'callanswer_set' with the actual related_name if different
+            question_text = getattr(answer, 'question', '')  # Adjust attribute name if different
+            selected_choice_text = getattr(answer, 'selected_choice', '')  # Adjust attribute name if different
+            formatted_answers.append(f"{question_text} {selected_choice_text}  |")
+        return "\n".join(formatted_answers) if formatted_answers else ""
+# 2. سریالایزر برای مدیریت نقش کاربران در پروژه

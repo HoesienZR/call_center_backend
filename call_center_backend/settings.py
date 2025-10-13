@@ -23,6 +23,7 @@ load_dotenv()
 TSMS_USERNAME = config('TSMS_USERNAME')
 TSMS_PASSWORD = config('TSMS_PASSWORD')
 TSMS_FROM_NUMBER = config('TSMS_FROM_NUMBER')
+DEV_PHONE = config('DEV_PHONE')
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -58,7 +59,12 @@ REST_FRAMEWORK = {
         'rest_framework.permissions.IsAuthenticated',
     ],
     'DEFAULT_PAGINATION_CLASS': 'rest_framework.pagination.PageNumberPagination',
-    'PAGE_SIZE': 20
+    'PAGE_SIZE': 20,
+    'DEFAULT_RENDERER_CLASSES': (
+        'rest_framework.renderers.JSONRenderer',
+        'rest_framework.renderers.BrowsableAPIRenderer',
+        'drf_excel.renderers.XLSXRenderer',
+    ),
 }
 # Application definition
 
@@ -177,7 +183,7 @@ CELERY_BEAT_SCHEDULE = {
         'schedule': 3600.0,  # هر ساعت چک کن (3600 ثانیه)
     },
 }
-
+"""
 DATABASES = {
   'default': dj_database_url.config(default=os.environ.get("DATABASE_URL")),
 }
@@ -194,4 +200,4 @@ DATABASES = {
         }
     }
 
-"""
+

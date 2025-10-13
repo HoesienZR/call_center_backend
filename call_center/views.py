@@ -35,12 +35,14 @@ from .utils import (
     validate_phone_number, normalize_phone_number, generate_secure_password,
     is_caller_user, assign_contacts_randomly, validate_excel_data, clean_string_field,generate_username
 )
+from drf_excel.mixins import XLSXFileMixin
+from drf_excel.renderers import XLSXRenderer
 import traceback
 from rest_framework.views import APIView
 from rest_framework import status, permissions
 from .excel_imports import import_contacts_from_excel
 
-
+from django.shortcuts import get_object_or_404
 # تنظیم logger
 logger = logging.getLogger(__name__)
 
@@ -1440,9 +1442,14 @@ class CallViewSet(viewsets.ModelViewSet):
     permission_classes = [IsAuthenticated]
 
     def get_queryset(self):
+        project_id = self.request.GET.get('project_id')
+        if project_id :
+            project  = get_object_or_404(Project,id=project_id)
         queryset = super().get_queryset()
         if self.request.user.is_staff:
             return queryset
+        if project_id and project.created_by == self.request.user:
+            return queryset.filter(project=project)
         # Callers can only see their own calls
         return queryset.filter(caller=self.request.user)
 
@@ -1815,12 +1822,15 @@ class LargePageSizePagination(PageNumberPagination):
     page_size = 100000
     page_size_query_param = 'page_size'
     max_page_size = 100000
-class CallExcelViewSet(viewsets.ReadOnlyModelViewSet):
+class CallExcelViewSet(XLSXFileMixin,viewsets.ReadOnlyModelViewSet):
     """
     Viewset برای نمایش اطلاعات تماس‌ها.
     """
+    renderer_classes = (XLSXRenderer,)
+    filename = f'report_in_{datetime.now()}.xlsx'
     pagination_class = LargePageSizePagination
-    queryset = Call.objects.all().select_related('contact', 'project', 'caller')
+    queryset = Call.objects.select_related('contact', 'project', 'caller',).prefetch_related('answers__question',  # Fetches Question for each CallAnswer
+            'answers__selected_choice').all()
     serializer_class = CallExcelSerializer
     permission_classes = [IsAuthenticated,IsAdminUser | IsProjectAdmin]
     def get_queryset(self):
@@ -2321,3 +2331,7 @@ class TicketViewSet(viewsets.ModelViewSet):
     serializer_class = TicketSerializer
     permission_classes =[IsAuthenticated]
     queryset = Ticket.objects.all()
+
+    def perform_create(self, serializer):
+        user = self.request.user
+        serializer.save(user=user)
