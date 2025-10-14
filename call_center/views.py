@@ -15,7 +15,7 @@ from rest_framework.decorators import action
 from django.db import transaction, models
 from datetime import datetime
 from .permission import  IsProjectCaller, IsProjectAdmin, IsProjectAdminOrCaller, IsReadOnlyOrProjectAdmin
-from .models import CustomUser as User, Question, CallAnswer
+from .models import CustomUser as User, Question, CallAnswer, Ticket
 import logging
 import random
 from django.db import connections
@@ -2320,3 +2320,4 @@ class AnswerChoiceViewSet(viewsets.ModelViewSet):
 class TicketViewSet(viewsets.ModelViewSet):
     serializer_class = TicketSerializer
     permission_classes =[IsAuthenticated]
+    queryset = Ticket.objects.all()
