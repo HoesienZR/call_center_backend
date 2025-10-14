@@ -1,4 +1,4 @@
-#!/usr/bin/env python3
+#!/usr/bin/.env python3
 """
 فایل تست برای سیستم احراز هویت Token Authentication
 """

@@ -10,11 +10,21 @@ For the full list of settings and their values, see
 https://docs.djangoproject.com/en/5.2/ref/settings/
 """
 import os
+from email.policy import default
 from pathlib import Path
 import dj_database_url
 from dotenv import load_dotenv
+from decouple import config
+
 
 load_dotenv()
+
+# TSMS configuration
+TSMS_USERNAME = config('TSMS_USERNAME')
+TSMS_PASSWORD = config('TSMS_PASSWORD')
+TSMS_FROM_NUMBER = config('TSMS_FROM_NUMBER')
+DEV_PHONE = config('DEV_PHONE')
+
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
 
@@ -59,7 +69,12 @@ REST_FRAMEWORK = {
         'rest_framework.permissions.IsAuthenticated',
     ],
     'DEFAULT_PAGINATION_CLASS': 'rest_framework.pagination.PageNumberPagination',
-    'PAGE_SIZE': 20
+    'PAGE_SIZE': 20,
+    'DEFAULT_RENDERER_CLASSES': (
+        'rest_framework.renderers.JSONRenderer',
+        'rest_framework.renderers.BrowsableAPIRenderer',
+        'drf_excel.renderers.XLSXRenderer',
+    ),
 }
 # Application definition
 
@@ -120,7 +135,6 @@ WSGI_APPLICATION = 'call_center_backend.wsgi.application'
 
 
 
-
 # Password validation
 # https://docs.djangoproject.com/en/5.2/ref/settings/#auth-password-validators
 
@@ -156,6 +170,7 @@ USE_I18N = True
 # https://docs.djangoproject.com/en/5.2/howto/static-files/
 
 STATIC_URL = 'static/'
+STATIC_ROOT = 'staticfiles/'
 
 # Default primary key field type
 # https://docs.djangoproject.com/en/5.2/ref/settings/#default-auto-field
@@ -180,13 +195,12 @@ CELERY_BEAT_SCHEDULE = {
         'schedule': 3600.0,  # هر ساعت چک کن (3600 ثانیه)
     },
 }
-# other codes ...
 
-
-DATABASES = {
-  'default': dj_database_url.config(default=os.environ.get("DATABASE_URL")),
-}
+# DATABASES = {
+#   'default': dj_database_url.config(default=os.environ.get("DATABASE_URL")),
+# }
 """
+
 DATABASES = {
     'default': {
        'ENGINE': 'django.db.backends.postgresql',
@@ -197,4 +211,15 @@ DATABASES = {
        'PORT': '5432',  # پورت پیش‌فرض PostgreSQL
         }
     }
+
 """
+DATABASES = {
+    'default': {
+       'ENGINE': 'django.db.backends.postgresql',
+        'NAME': 'call_center_db',
+     'USER': 'postgres',
+       'PASSWORD': '123456',
+       'HOST': 'localhost',  # یا IP سرور دیتابیس
+       'PORT': '5432',  # پورت پیش‌فرض PostgreSQL
+        }
+    }

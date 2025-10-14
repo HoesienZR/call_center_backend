@@ -1,9 +1,11 @@
 # call_center/excel_imports.py
 import pandas as pd
 import uuid
-from django.contrib.auth.models import User
+from django.contrib.auth import get_user_model
 from .models import Contact, Project, ProjectCaller
 from .utils import is_caller_user, clean_string_field
+
+User = get_user_model()
 
 def import_callers_from_excel(file_obj):
     """
@@ -44,7 +46,7 @@ def import_callers_from_excel(file_obj):
 def import_contacts_from_excel(file_obj, project: Project):
     """
     اکسل مخاطبین را پردازش و مخاطبین پروژه ایجاد می‌کند.
-    فرمت: full_name, phone, assigned_caller_username
+    فرمت: full_name, phone, assigned_caller_username (اختیاری)
     """
     created_contacts = []
     try:
@@ -52,7 +54,8 @@ def import_contacts_from_excel(file_obj, project: Project):
     except Exception:
         df = pd.read_csv(file_obj, dtype=str)
 
-    required_columns = ["full_name", "phone", "assigned_caller_username"]
+    # ستون‌های ضروری: نام و شماره
+    required_columns = ["full_name", "phone"]
     for col in required_columns:
         if col not in df.columns:
             raise ValueError(f"ستون '{col}' در فایل موجود نیست.")
@@ -68,15 +71,22 @@ def import_contacts_from_excel(file_obj, project: Project):
             phone=phone
         )
 
+        # بررسی وجود تماس‌گیرنده در سیستم
         if assigned_caller_username:
             try:
                 caller = User.objects.get(username=assigned_caller_username)
                 if is_caller_user(caller):
                     contact.assigned_caller = caller
+                    contact.is_special = True  # ✅ یعنی از اکسل با تماس‌گیرنده آمده
             except User.DoesNotExist:
-                pass
+                contact.assigned_caller = None
+                contact.is_special = False
+        else:
+            contact.assigned_caller = None
+            contact.is_special = False      # اگر ستون خالی بود → بدون تماس‌گیرنده
 
         contact.save()
         created_contacts.append(contact.phone)
 
     return created_contacts
+
