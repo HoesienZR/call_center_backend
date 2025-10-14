@@ -652,12 +652,9 @@ class AnswerChoice(models.Model):
     class Meta:
         verbose_name = "گزینه پاسخ"
         verbose_name_plural = "گزینه‌های پاسخ"
+    def __str__(self):
+        return self.text
 
-    def clean(self):
-        # Enforce at most 5 choices per question
-        if self.question.choices.count() >= 5:
-            raise ValidationError("هر سوال حداکثر ۵ گزینه پاسخ می‌تواند داشته باشد.")
-        super().clean()
 class CallAnswer(models.Model):
     """مدل واسط برای پاسخ‌های تماس به سوالات"""
     call = models.ForeignKey(Call, on_delete=models.CASCADE, related_name='answers', verbose_name="تماس")
