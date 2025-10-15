@@ -2266,6 +2266,7 @@ class ContactImportView(APIView):
                 {
                     "message": f"{len(created_contacts)} مخاطب با موفقیت اضافه شد.",
                     "created_count": len(created_contacts),
+                    "contacts": created_contacts,  # شامل شماره و نام
                     "project": project.name,
                 },
                 status=status.HTTP_201_CREATED

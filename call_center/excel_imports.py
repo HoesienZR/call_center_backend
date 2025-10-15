@@ -63,30 +63,42 @@ def import_contacts_from_excel(file_obj, project: Project):
     for index, row in df.iterrows():
         full_name = clean_string_field(row.get("full_name", "نامشخص"))
         phone = str(clean_string_field(row.get("contact_phone", f"unknown_{uuid.uuid4().hex[:8]}")))
-        assigned_caller_phonenumber = clean_string_field(row.get("assigned_caller_phonenumber", ""))
+        assigned_caller_phone = clean_string_field(row.get("assigned_caller_phone", ""))
 
-        contact = Contact(
+        # اگر شماره مخاطب بدون صفر بود , صفر اضافه کن
+        if phone.isdigit() and not phone.startswith("0") and len(phone) in (9, 10):
+            phone = "0" + phone
+
+        assigned_caller = None
+        is_special = False
+
+
+
+
+        # تلاش برای یافتن تماس‌گیرنده از طریق شماره تلفن
+        # اگر شماره تماس‌گیرنده داده شده و بدون صفر بود , صفر اضافه کن
+        if assigned_caller_phone and not assigned_caller_phone.startswith("0"):
+            assigned_caller_phone = "0" + assigned_caller_phone
+            try:
+                caller = User.objects.get(phone_number=assigned_caller_phone)
+
+                # اگر نقش تماس‌گیرنده یا ادمین دارد → به عنوان تماس‌گیرنده ست شود
+                if is_caller_user(caller, project):
+                    assigned_caller = caller
+                    is_special = True
+            except User.DoesNotExist:
+                assigned_caller = None
+                is_special = False
+
+        # ساخت مخاطب
+        contact = Contact.objects.create(
             project=project,
             full_name=full_name,
-            phone=phone
+            phone=phone,
+            assigned_caller=assigned_caller,
+            is_special=is_special
         )
 
-        # بررسی وجود تماس‌گیرنده در سیستم
-        if assigned_caller_phonenumber:
-            try:
-                caller = User.objects.get(phone_number=assigned_caller_phonenumber)
-                print(caller)
-                if is_caller_user(caller, project):
-                    contact.assigned_caller = caller
-                    contact.is_special = True  # ✅ یعنی از اکسل با تماس‌گیرنده آمده
-            except User.DoesNotExist:
-                contact.assigned_caller = None
-                contact.is_special = False
-        else:
-            contact.assigned_caller = None
-            contact.is_special = False      # اگر ستون خالی بود → بدون تماس‌گیرنده
-
-        contact.save()
         created_contacts.append(contact.phone)
 
     return created_contacts
