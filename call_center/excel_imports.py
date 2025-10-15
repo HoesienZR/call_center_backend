@@ -55,15 +55,15 @@ def import_contacts_from_excel(file_obj, project: Project):
         df = pd.read_csv(file_obj, dtype=str)
 
     # ستون‌های ضروری: نام و شماره
-    required_columns = ["full_name", "phone"]
+    required_columns = ["full_name", "contact_phone"]
     for col in required_columns:
         if col not in df.columns:
             raise ValueError(f"ستون '{col}' در فایل موجود نیست.")
 
     for index, row in df.iterrows():
         full_name = clean_string_field(row.get("full_name", "نامشخص"))
-        phone = str(clean_string_field(row.get("phone", f"unknown_{uuid.uuid4().hex[:8]}")))
-        assigned_caller_username = clean_string_field(row.get("assigned_caller_username", ""))
+        phone = str(clean_string_field(row.get("contact_phone", f"unknown_{uuid.uuid4().hex[:8]}")))
+        assigned_caller_phonenumber = clean_string_field(row.get("assigned_caller_phonenumber", ""))
 
         contact = Contact(
             project=project,
@@ -72,10 +72,11 @@ def import_contacts_from_excel(file_obj, project: Project):
         )
 
         # بررسی وجود تماس‌گیرنده در سیستم
-        if assigned_caller_username:
+        if assigned_caller_phonenumber:
             try:
-                caller = User.objects.get(username=assigned_caller_username)
-                if is_caller_user(caller):
+                caller = User.objects.get(phone_number=assigned_caller_phonenumber)
+                print(caller)
+                if is_caller_user(caller, project):
                     contact.assigned_caller = caller
                     contact.is_special = True  # ✅ یعنی از اکسل با تماس‌گیرنده آمده
             except User.DoesNotExist:
