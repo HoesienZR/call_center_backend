@@ -39,7 +39,16 @@ SECRET_KEY = 'django-insecure-ome=0vja_c!0lw*e#3sh5mn!^-b3#%(4=nf9-y39obl0n3e1kn
 DEBUG = True
 
 ALLOWED_HOSTS = ['*']
-
+SPECTACULAR_SETTINGS = {
+    'TITLE': 'MarCazTamas',
+    'DESCRIPTION': 'a api for markaz tamas ',
+    'VERSION': '1.0.0',
+    'SERVE_INCLUDE_SCHEMA': False,
+    'SWAGGER_UI_DIST': 'MarCazTamas',
+    'SWAGGER_UI_FAVICON_HREF': 'MarCazTamas',
+    'REDOC_DIST': 'MarCazTamas',
+    # OTHER SETTINGS
+}
 CORS_ALLOW_ALL_ORIGINS = True
 CORS_ALLOWED_ORIGINS = [
     "http://localhost:5173",
@@ -50,6 +59,7 @@ CORS_ALLOWED_ORIGINS = [
 ]
 CORS_ALLOW_CREDENTIALS = True
 REST_FRAMEWORK = {
+    'DEFAULT_SCHEMA_CLASS': 'drf_spectacular.openapi.AutoSchema',
     'DEFAULT_AUTHENTICATION_CLASSES': [
         'rest_framework.authentication.TokenAuthentication',
         'rest_framework.authentication.SessionAuthentication',
@@ -82,6 +92,7 @@ INSTALLED_APPS = [
     'django_celery_beat',
     "silk",
     'import_export',
+    'drf_spectacular',
 
 ]
 USE_TZ = True
@@ -150,6 +161,7 @@ LANGUAGE_CODE = 'en-us'
 
 TIME_ZONE = 'UTC'
 
+
 USE_I18N = True
 
 
@@ -187,7 +199,7 @@ CELERY_BEAT_SCHEDULE = {
 # DATABASES = {
 #   'default': dj_database_url.config(default=os.environ.get("DATABASE_URL")),
 # }
-"""
+
 
 DATABASES = {
     'default': {
@@ -200,14 +212,14 @@ DATABASES = {
         }
     }
 
-"""
-DATABASES = {
-    'default': {
-       'ENGINE': 'django.db.backends.postgresql',
-        'NAME': 'call_center_db',
-     'USER': 'postgres',
-       'PASSWORD': '123456',
-       'HOST': 'localhost',  # یا IP سرور دیتابیس
-       'PORT': '5432',  # پورت پیش‌فرض PostgreSQL
-        }
-    }
+
+# DATABASES = {
+#     'default': {
+#        'ENGINE': 'django.db.backends.postgresql',
+#         'NAME': 'call_center_db',
+#      'USER': 'postgres',
+#        'PASSWORD': '123456',
+#        'HOST': 'localhost',  # یا IP سرور دیتابیس
+#        'PORT': '5432',  # پورت پیش‌فرض PostgreSQL
+#         }
+#     }

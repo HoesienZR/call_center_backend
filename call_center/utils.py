@@ -1,7 +1,7 @@
 import re
 import random
 from django.contrib.auth.models import User
-from .models import Contact, ProjectCaller
+from .models import Contact, ProjectCaller, ProjectMembership
 from django.db.models import Count
 
 import string
@@ -68,13 +68,16 @@ def generate_secure_password(length=12):
     return ''.join(random.choice(characters) for _ in range(length))
 
 
-def is_caller_user(user):
+def is_caller_user(user, project=None):
     """
     بررسی اینکه آیا کاربر یک تماس‌گیرنده است یا خیر
     تماس‌گیرندگان: کاربرانی که is_staff=False و is_superuser=False هستند
     """
-    return not user.is_staff and not user.is_superuser and user.is_active
-
+    if user.is_staff:
+        return True
+    if project:
+        return ProjectMembership.objects.filter(user=user, project=project, role="caller").exists()
+    return ProjectMembership.objects.filter(user=user, role="caller").exists()
 
 def get_available_callers_for_project(project):
     """

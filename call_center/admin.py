@@ -95,11 +95,18 @@ class ContactAdmin(admin.ModelAdmin):
     """
     تنظیمات پنل ادمین برای مدل مخاطب.
     """
-    list_display = ('full_name', 'phone', 'project', 'call_status', 'assigned_caller', 'last_call_date',"birth_date","gender")
+    list_display = ('full_name', 'phone', 'project', 'call_status', 'assigned_caller', 'assigned_caller_phone' ,'last_call_date',"birth_date","gender")
     list_filter = ('project', 'call_status', 'is_active')
     search_fields = ('full_name', 'phone', 'email', 'project__name')
     # برای بهبود عملکرد، فیلدهای سنگین را در لیست نمایش ندهید
     # raw_id_fields = ('membership',)
+
+    @admin.display(description="شماره تماس‌گیرنده تخصیص داده‌شده")
+    def assigned_caller_phone(self, obj):
+        """نمایش شماره تلفن تماس‌گیرنده تخصیص داده‌شده"""
+        if obj.assigned_caller and hasattr(obj.assigned_caller, "phone_number"):
+            return obj.assigned_caller.phone_number
+        return "-"
 
 @admin.register(Call)
 class CallAdmin(admin.ModelAdmin):
