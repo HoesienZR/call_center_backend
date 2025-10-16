@@ -18,7 +18,6 @@ class CustomUser(AbstractUser):
     def __str__(self):
         return self.username
 
-
 class Project(models.Model):
     """مدل برای مدیریت پروژه‌های تماس مختلف"""
     STATUS_CHOICES = [
@@ -156,7 +155,6 @@ class Project(models.Model):
 
     # ... (متدهای دیگر مدل Project بدون تغییر باقی می‌مانند)
 
-
 # 2. مدل جدید برای مدیریت سطوح دسترسی کاربران در هر پروژه
 class ProjectMembership(models.Model):
     """
@@ -181,7 +179,6 @@ class ProjectMembership(models.Model):
 
     def __str__(self):
         return f"{self.user.username} as {self.get_role_display()} in {self.project.name}"
-
 
 class Contact(models.Model):
     CALL_STATUS_CHOICES = [
@@ -265,8 +262,6 @@ class Contact(models.Model):
     def get_last_call(self):
         last_call = self.calls.order_by("-call_date").first()
         return last_call
-
-
 
 class ProjectCaller(models.Model):
     """مدل برای تخصیص تماس‌گیرندگان به پروژه‌ها"""

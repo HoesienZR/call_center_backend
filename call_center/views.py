@@ -46,6 +46,12 @@ from django.shortcuts import get_object_or_404
 # تنظیم logger
 logger = logging.getLogger(__name__)
 
+from rest_framework import viewsets
+from rest_framework.permissions import IsAuthenticated
+from django.db.models import Prefetch
+from .models import Question, AnswerChoice  # Adjust imports as needed
+from .serializers import QuestionSerializer  # Assumes writable serializer with nested choices
+
 
 def check_postgresql_connection(request):
     try:
@@ -71,6 +77,7 @@ class UserViewSet(viewsets.ReadOnlyModelViewSet):
         callers = self.get_queryset().filter(id__in=caller_user_ids)
         serializer = self.get_serializer(callers, many=True)
         return Response(serializer.data, status=status.HTTP_200_OK)
+
 
     @action(detail=False, methods=['get'], url_path='me', url_name='me')
     def me(self, request):
@@ -2277,11 +2284,6 @@ class ContactImportView(APIView):
                 {"error": f"خطا در پردازش فایل: {str(e)}"},
                 status=status.HTTP_400_BAD_REQUEST
             )
-from rest_framework import viewsets
-from rest_framework.permissions import IsAuthenticated
-from django.db.models import Prefetch
-from .models import Question, AnswerChoice  # Adjust imports as needed
-from .serializers import QuestionSerializer  # Assumes writable serializer with nested choices
 
 class QuestionViewSet(viewsets.ModelViewSet):
     """

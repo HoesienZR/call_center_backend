@@ -19,6 +19,9 @@ from .models import (
     CachedStatistics, Question, AnswerChoice, CallAnswer, Ticket,
 )
 from rest_framework import serializers
+from .models import Call, Contact, Project, ProjectMembership
+import json
+from rest_framework import serializers
 # 1. سریالایزر برای مدل کاربر سفارشی
 class CustomUserSerializer(serializers.ModelSerializer):
     """
@@ -39,9 +42,7 @@ class CustomUserSerializer(serializers.ModelSerializer):
     def get_persian_date_joined(self, obj):
         return str(JalaliDate((obj.date_joined.date())))
 # your_app/serializers.py
-from rest_framework import serializers
-from .models import Call, Contact, Project, ProjectMembership
-import json
+
 class AnswerChoiceSerializer(serializers.ModelSerializer):
     """Serializer for answer choices."""
     class Meta:
@@ -119,7 +120,6 @@ class ProjectSerializer(serializers.ModelSerializer):
         return obj.get_statistics()
     def get_completed_calls_count(self, obj):
         return obj.calls.filter(status="completed").count()
-
     def get_call_answers_summary(self, obj):
         """Custom field to retrieve all answers from the project's calls, grouped by question."""
         project = obj  # The project instance
