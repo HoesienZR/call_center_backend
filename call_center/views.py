@@ -924,7 +924,7 @@ class ContactViewSet(viewsets.ModelViewSet):
                 pass
 
         serializer.save(created_by=user)
-
+    #TODO maybe this need to get deleted
     @action(detail=False, methods=['post'], url_path='upload-contacts')
     def upload_contacts_file(self, request):
         """
@@ -1237,7 +1237,7 @@ class ContactViewSet(viewsets.ModelViewSet):
                 {"detail": "شما اجازه آزاد کردن این مخاطب را ندارید."},
                 status=status.HTTP_403_FORBIDDEN
             )
-
+    #TODO maybe this is also useless
     @action(detail=True, methods=["post"], url_path="remove-assigned-caller")
     def remove_assigned_caller(self, request, pk=None):
         """
@@ -1306,7 +1306,7 @@ class ContactViewSet(viewsets.ModelViewSet):
         contact.save()
 
         return Response(CallSerializer(call).data, status=status.HTTP_201_CREATED)
-
+    #TODO another useless
     @action(detail=False, methods=['get'], url_path="pending_in_project/(?P<project_id>\d+)")
     def pending_contacts_in_project(self, request, project_id=None):
         """
@@ -1476,11 +1476,8 @@ class CallViewSet(viewsets.ModelViewSet):
             return Response({"error": "contact_id الزامی است"}, status=400)
 
         try:
-            print(contact_id)
             contact = Contact.objects.get(id=contact_id)
-            print("contact")
             project = Project.objects.get(id=project_id) if project_id else None
-            print("project")
         except (Contact.DoesNotExist, Project.DoesNotExist):
             return Response({"error": "Contact یا Project یافت نشد"}, status=404)
 
@@ -1666,24 +1663,24 @@ class UploadedFileViewSet(viewsets.ReadOnlyModelViewSet):
 
         return Response({"message": "فایل با موفقیت پردازش شد."})  # پیام موفقیت‌آمیز
 
-
+#TODO this is also useless
 class ExportReportViewSet(viewsets.ReadOnlyModelViewSet):
     queryset = ExportReport.objects.all()
     serializer_class = ExportReportSerializer
     permission_classes = [IsAdminUser]
-
+    #TODO this is useless too
     @action(detail=False, methods=["post"], permission_classes=[IsAdminUser])
     def export_contacts(self, request):
         # Implement export logic here (similar to Flask example)
         return Response({"detail": "Export contacts endpoint not yet implemented."},
                         status=status.HTTP_501_NOT_IMPLEMENTED)
-
+    #TODO this is also useless
     @action(detail=False, methods=["post"], permission_classes=[IsAuthenticated])
     def export_calls(self, request):
         # Implement export logic here (similar to Flask example)
         return Response({"detail": "Export calls endpoint not yet implemented."},
                         status=status.HTTP_501_NOT_IMPLEMENTED)
-
+    #TODO  this useless must get deleted
     @action(detail=True, methods=["get"], permission_classes=[IsAuthenticated])
     def download(self, request, pk=None):
         # Implement download logic here (similar to Flask example)
@@ -1696,27 +1693,7 @@ class CachedStatisticsViewSet(viewsets.ReadOnlyModelViewSet):
     permission_classes = [IsAdminUser]
 
 
-def assign_contacts_randomly(project, contacts_list):
-    """
-    تخصیص تصادفی مخاطبین به تماس‌گیرندگان پروژه
-    """
-    project_callers = list(ProjectMembership.objects.filter(
-        project=project, role='caller'
-    ).values_list('user_id', flat=True))
-
-    if not project_callers:
-        return False
-
-    import random
-    for contact in contacts_list:
-        if not contact.assigned_caller:
-            random_caller_id = random.choice(project_callers)
-            contact.assigned_caller_id = random_caller_id
-            contact.save()
-
-    return True
-
-
+#TODO request must change to get and start and end date must change also and queris must get optimised
 @api_view(['POST'])
 @permission_classes([IsAuthenticated])
 def admin_dashboard_data(request):

@@ -59,7 +59,7 @@ def import_contacts_from_excel(file_obj, project: Project):
     for col in required_columns:
         if col not in df.columns:
             raise ValueError(f"ستون '{col}' در فایل موجود نیست.")
-
+    #TODO what is exatcly unknown is for phone ?  a user with random ? number ?
     for index, row in df.iterrows():
         full_name = clean_string_field(row.get("full_name", "نامشخص"))
         phone = str(clean_string_field(row.get("contact_phone", f"unknown_{uuid.uuid4().hex[:8]}")))

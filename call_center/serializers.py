@@ -66,7 +66,7 @@ class CallAnswerSummarySerializer(serializers.ModelSerializer):
     class Meta:
         model = CallAnswer
         fields = ['question', 'selected_choice', 'choice_counts']
-
+    #TODO useless method field no use at all
     def get_choice_counts(self, obj):
         # Optional: Aggregate counts for this answer's choice across the project
         project = self.context['project']
@@ -100,26 +100,25 @@ class ProjectSerializer(serializers.ModelSerializer):
     """
     سریالایزر برای مدل Project.
     """
-    questions = QuestionSerializer(many=True,read_only=True)
     call_answers_summary = serializers.SerializerMethodField()
     created_by = CustomUserSerializer(read_only=True)
     created_by_id = serializers.PrimaryKeyRelatedField(
         queryset=CustomUser.objects.all(), source='created_by', write_only=True
     )
     # نمایش اعضای پروژه با نقش‌هایشان
+    #TODO we must nested router for  this one
     members = ProjectMembershipSerializer(source='projectmembership_set', many=True, read_only=True)
 
     # فیلدهای آماری
-    contacts_count = serializers.IntegerField(source='contacts.count', read_only=True)
-    calls_count = serializers.IntegerField(source='calls.count', read_only=True)
-    completed_calls_count = serializers.SerializerMethodField()
+
+    #TODO this three maybe need to get fixed by select_ralated and prefetch_related
     project_statistics = serializers.SerializerMethodField()
     persian_updated_at = serializers.SerializerMethodField()
+    #TODO before change date to djangojalali don't  change this
     persian_created_at = serializers.SerializerMethodField()
     def get_project_statistics(self,obj):
         return obj.get_statistics()
-    def get_completed_calls_count(self, obj):
-        return obj.calls.filter(status="completed").count()
+
     def get_call_answers_summary(self, obj):
         """Custom field to retrieve all answers from the project's calls, grouped by question."""
         project = obj  # The project instance
@@ -148,87 +147,6 @@ class ProjectSerializer(serializers.ModelSerializer):
         # Convert to list for serialization
         summary_list = list(grouped_answers.values())
         return summary_list
-
-    def update(self, instance, validated_data):
-        """
-        Custom update method to handle nested questions and answer choices.
-        """
-        # Extract nested questions data
-        questions_data = validated_data.pop('questions', None)
-
-        # Update the base project instance
-        for attr, value in validated_data.items():
-            setattr(instance, attr, value)
-        instance.save()
-
-        # Handle questions and choices within a transaction
-        if questions_data is not None:
-            with transaction.atomic():
-                # Track existing question IDs in payload for updates/deletions
-                question_ids_in_payload = {q.get('id') for q in questions_data if q.get('id')}
-
-                # Update or create questions
-                for question_data in questions_data:
-                    question_id = question_data.pop('id', None)
-                    if question_id:
-                        # Update existing question
-                        question = Question.objects.get(id=question_id, project=instance)
-                        for attr, value in question_data.items():
-                            setattr(question, attr, value)
-                        question.save()
-                    else:
-                        # Create new question
-                        question = Question.objects.create(project=instance, **question_data)
-
-                    # Handle nested choices for this question
-                    self._update_choices(question, question_data.pop('choices', []))
-
-                # Optional: Delete questions not in payload (full replacement logic)
-                # existing_questions = Question.objects.filter(project=instance)
-                # for q in existing_questions:
-                #     if q.id not in question_ids_in_payload:
-                #         q.delete()
-
-        return instance
-
-    def _update_choices(self, question, choices_data):
-        """
-        Helper method to update or create answer choices for a question.
-        """
-        choice_ids_in_payload = {c.get('id') for c in choices_data if c.get('id')}
-
-        for choice_data in choices_data:
-            choice_id = choice_data.pop('id', None)
-            if choice_id:
-                # Update existing choice
-                choice = AnswerChoice.objects.get(id=choice_id, question=question)
-                for attr, value in choice_data.items():
-                    setattr(choice, attr, value)
-                choice.save()
-            else:
-                # Create new choice
-                AnswerChoice.objects.create(question=question, **choice_data)
-
-    def create(self, validated_data):
-        questions_data = validated_data.pop('questions', [])
-        # Create the project instance (created_by will be set in perform_create)
-        project = Project.objects.create(**validated_data)
-
-        # Create questions and their choices within a transaction for atomicity
-        with transaction.atomic():
-            for question_data in questions_data:
-                # Extract nested choices
-                choices_data = question_data.pop('choices', [])
-                print(questions_data)
-                # Create question linked to project
-                question = Question.objects.create(project=project, **question_data)
-                # Create choices linked to question
-                print("this is choices",choices_data)
-                for choice_data in choices_data:
-                    print(choice_data)
-                    AnswerChoice.objects.create(question=question, **choice_data)
-
-        return project
     def to_representation(self, instance):
         """Ensure active questions are filtered."""
         representation = super().to_representation(instance)
@@ -241,9 +159,8 @@ class ProjectSerializer(serializers.ModelSerializer):
         model = Project
         fields = (
             'id', 'name', 'description', 'status', 'created_by',
-            'created_by_id', 'created_at', 'updated_at', 'members',
-            'contacts_count', 'calls_count', 'completed_calls_count',
-            "show","call_answers_summary","questions",'persian_updated_at'
+            'created_by_id', 'members',
+            "show","call_answers_summary",'persian_updated_at'
             ,'persian_created_at','project_statistics'
         )
         read_only_fields = ('created_at', 'updated_at', 'members')
@@ -270,6 +187,7 @@ class ContactSerializer(serializers.ModelSerializer):
     """
     سریالایزر برای مدل Contact.
     """
+    #TODO this serializer is damn helll need to get fixed as soon as possible
     project_id = serializers.PrimaryKeyRelatedField(
         queryset=Project.objects.all(), source='project', write_only=True
     )
@@ -453,8 +371,6 @@ class ContactSerializer(serializers.ModelSerializer):
             recent_calls = obj.calls.prefetch_related(
                 'answers__question',
                 'answers__selected_choice'
-            ).filter(
-                notes__isnull=False
             ).exclude(
                 notes=''
             ).order_by('-call_date')[:5]
@@ -567,6 +483,7 @@ class CallSerializer(serializers.ModelSerializer):
     """
     سریالایزر برای مدل Call.
     """
+    #todo this need to get damn optimised as ssoooooon as possible
     answers = CallAnswerSerializer(many=True, required=False)
     contact = ContactSerializer(read_only=True)
     contact_id = serializers.PrimaryKeyRelatedField(
@@ -624,7 +541,7 @@ class CallSerializer(serializers.ModelSerializer):
         # ... (کد validate شما در اینجا قرار می‌گیرد)
         return data
 
-
+#TODO maybe this is useless
 # 6. سایر سریالایزرها با ارجاعات اصلاح شده
 class CallEditHistorySerializer(serializers.ModelSerializer):
     edited_by_id = serializers.PrimaryKeyRelatedField(
@@ -633,12 +550,12 @@ class CallEditHistorySerializer(serializers.ModelSerializer):
     class Meta:
         model = CallEditHistory
         fields = '__all__'
-
+#TODO  maybe and this also is useless
 class CallStatisticsSerializer(serializers.ModelSerializer):
     class Meta:
         model = CallStatistics
         fields = '__all__'
-
+#TODO maybe and this also be useless too
 class SavedSearchSerializer(serializers.ModelSerializer):
     user_id = serializers.PrimaryKeyRelatedField(
         queryset=CustomUser.objects.all(), source='user', write_only=True
@@ -647,7 +564,7 @@ class SavedSearchSerializer(serializers.ModelSerializer):
     class Meta:
         model = SavedSearch
         fields = '__all__'
-
+#TODO maybe this be useless too
 class UploadedFileSerializer(serializers.ModelSerializer):
     uploaded_by_id = serializers.PrimaryKeyRelatedField(
         queryset=CustomUser.objects.all(), source='uploaded_by', write_only=True
@@ -655,7 +572,7 @@ class UploadedFileSerializer(serializers.ModelSerializer):
     class Meta:
         model = UploadedFile
         fields = '__all__'
-
+#TODO maybe this be useless to
 class ExportReportSerializer(serializers.ModelSerializer):
     exported_by_id = serializers.PrimaryKeyRelatedField(
         queryset=CustomUser.objects.all(), source='exported_by', write_only=True
@@ -664,7 +581,7 @@ class ExportReportSerializer(serializers.ModelSerializer):
     class Meta:
         model = ExportReport
         fields = '__all__'
-
+#TODO maybe this is useless also
 class CachedStatisticsSerializer(serializers.ModelSerializer):
     stat_value = serializers.JSONField(required=False)
     class Meta:
@@ -680,7 +597,7 @@ class GeneralStatisticsSerializer(serializers.Serializer):
     success_rate = serializers.FloatField()
     answer_rate = serializers.FloatField()
 
-
+#
 class CallerPerformanceSerializer(serializers.Serializer):
     caller_id = serializers.IntegerField()
     first_name = serializers.CharField()
@@ -712,12 +629,13 @@ class CallerPerformanceSerializer(serializers.Serializer):
     avg_duration_formatted = serializers.CharField()
     calls_with_duration = serializers.IntegerField()
 
-
 class ProjectStatisticsSerializer(serializers.Serializer):
     project_id = serializers.IntegerField()
     project_name = serializers.CharField()
     general_statistics = GeneralStatisticsSerializer()
     caller_performance = CallerPerformanceSerializer(many=True)
+
+
 class CallExcelSerializer(serializers.ModelSerializer):
     contact_name = serializers.CharField(source='contact.full_name', read_only=True)
     contact_phone = serializers.CharField(source='contact.phone', read_only=True)
