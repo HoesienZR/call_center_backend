@@ -37,7 +37,7 @@ class Project(models.Model):
     updated_at = models.DateTimeField(auto_now=True, verbose_name="تاریخ به‌روزرسانی")
     # ارتباط با کاربران از طریق مدل واسط ProjectMembership
     members = models.ManyToManyField(settings.AUTH_USER_MODEL, through='ProjectMembership', related_name='projects', verbose_name="اعضای پروژه")
-
+    #TODO it must get  queries optimised
     def get_statistics(self):
         """دریافت آمار کلی پروژه"""
         total_contacts = self.contacts.count()
@@ -74,7 +74,7 @@ class Project(models.Model):
             'average_call_duration_seconds': round(average_duration, 2),
             'success_rate': round(success_rate, 2)
         }
-
+    #TODO  it's must get optimised also
     def get_caller_performance_report(self):
         """دریافت گزارش عملکرد تماس‌گیرندگان برای این پروژه"""
         caller_performance = []
@@ -100,7 +100,7 @@ class Project(models.Model):
                 'average_call_duration_seconds': round(average_duration, 2),
             })
         return caller_performance
-
+    #TODO it's must get deleted  have no use
     def get_call_status_over_time(self, start_date=None, end_date=None, interval='day'):
         """
         دریافت وضعیت تماس‌ها در طول زمان برای داشبورد.

@@ -142,7 +142,7 @@ class ProjectViewSet(viewsets.ModelViewSet):
             return Project.objects.all().prefetch_related(*base_prefetch)
 
         return user.projects.distinct().prefetch_related(*base_prefetch)
-
+    #TODO must  change this and just check this on s
     def perform_create(self, serializer):
         user = self.request.user
         if not user.can_create_projects:
@@ -158,6 +158,7 @@ class ProjectViewSet(viewsets.ModelViewSet):
     # در ProjectViewSet اضافه کنید:
 
     # در ProjectViewSet اضافه کنید:
+    #TODO must change to  to drf nested routers
     @action(detail=True, methods=['get'], url_path='user-role',
             permission_classes=[IsAuthenticated])
     def get_user_role(self, request, pk=None):
@@ -360,6 +361,7 @@ class ProjectViewSet(viewsets.ModelViewSet):
             return Response({
                 'error': f'خطا در ایجاد فایل اکسل: {str(e)}'
             }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+    #TODO this must change to nested router
     @action(detail=False, methods=['post'], url_path='check-user-role',
             permission_classes=[IsAuthenticated])
     def check_user_role(self, request):
@@ -650,6 +652,7 @@ class ProjectViewSet(viewsets.ModelViewSet):
             return Response({
                 "error": f"خطای داخلی سرور: {str(e)}"
             }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+    #TODO maybe need some changes
     @action(detail=True, methods=['post'], url_path='toggle-user-role',
             permission_classes=[IsAuthenticated, IsProjectAdmin])
     def toggle_user_role(self, request, pk=None):
@@ -737,6 +740,7 @@ class ProjectViewSet(viewsets.ModelViewSet):
         return Response(response_data, status=status.HTTP_200_OK)
 
     # اضافه کردن این اکشن به ProjectViewSet موجود
+    #TODO we need to use nested routers in this
     @action(detail=True, methods=['get'], url_path='members',
             permission_classes=[IsAuthenticated, IsProjectAdmin])
     def get_project_members(self, request, pk=None):
@@ -780,7 +784,7 @@ class ProjectViewSet(viewsets.ModelViewSet):
         project = self.get_object()
         report = project.get_caller_performance_report()
         return Response(report)
-
+    #TODO this also need to get deleted
     @action(detail=True, methods=["get"], permission_classes=[IsAuthenticated, IsProjectAdminOrCaller])
     def call_status_over_time(self, request, pk=None):
         project = self.get_object()
@@ -822,21 +826,18 @@ class ContactViewSet(viewsets.ModelViewSet):
             'format': self.format_kwarg,
             'view': self
         }
-
+    #TODO this also need to get some changes
     def get_queryset(self):
         """
         سفارشی‌سازی کوئری‌ست برای فیلتر مخاطبین بر اساس پروژه، وضعیت تماس و دسترسی کاربر.
         """
         queryset = self.queryset  # e.g., Contact.objects.all()
         user = self.request.user
-        print("queryset",queryset)
         status_filter = self.request.query_params.get("status")  # Use 'status', not 'call_status'
         project_id = self.request.query_params.get('project_id')
-        print(project_id)
         if project_id:
             try:
                 project = Project.objects.get(id=project_id)
-                print("project :",project)
                 if not (user.is_superuser or ProjectMembership.objects.filter(
                         project=project, user=user
                 ).exists()):
@@ -856,7 +857,6 @@ class ContactViewSet(viewsets.ModelViewSet):
                         project=project,
                         assigned_caller=user
                     )
-                print(contacts_qs)
                 contacts_qs = contacts_qs.prefetch_related(
                     'calls__answers__selected_choice',
                     'calls__answers__question',
@@ -866,7 +866,6 @@ class ContactViewSet(viewsets.ModelViewSet):
                 # Filter on call status if provided (via relation)
                 if status_filter:
                     contacts_qs = contacts_qs.filter(calls__status=status_filter)
-                    print(contacts_qs)
                 return contacts_qs
 
             except Project.DoesNotExist:
@@ -900,6 +899,7 @@ class ContactViewSet(viewsets.ModelViewSet):
         if status_filter:
             contacts_qs = contacts_qs.filter(calls__status=status_filter)
         return contacts_qs
+
     def perform_create(self, serializer):
         """
         ثبت مخاطب جدید با اعمال منطق تخصیص
@@ -2266,6 +2266,7 @@ class ContactImportView(APIView):
                 {
                     "message": f"{len(created_contacts)} مخاطب با موفقیت اضافه شد.",
                     "created_count": len(created_contacts),
+                    "contacts": created_contacts,  # شامل شماره و نام
                     "project": project.name,
                 },
                 status=status.HTTP_201_CREATED
