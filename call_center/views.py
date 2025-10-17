@@ -825,7 +825,7 @@ class ProjectCallerViewSet(viewsets.ModelViewSet):
 class ContactViewSet(viewsets.ModelViewSet):
     queryset = Contact.objects.all()
     serializer_class = ContactSerializer
-    permission_classes = [IsAuthenticated, IsProjectAdminOrCaller]
+    permission_classes = [IsAuthenticated, IsProjectAdminOrCaller|IsAdminUser]
 
     def get_serializer_context(self):
         return {
@@ -872,7 +872,7 @@ class ContactViewSet(viewsets.ModelViewSet):
                 )
                 # Filter on call status if provided (via relation)
                 if status_filter:
-                    contacts_qs = contacts_qs.filter(calls__status=status_filter)
+                    contacts_qs = contacts_qs.filter(call_status=status_filter)
                 return contacts_qs
 
             except Project.DoesNotExist:
@@ -904,7 +904,7 @@ class ContactViewSet(viewsets.ModelViewSet):
 
         # Filter on call status if provided
         if status_filter:
-            contacts_qs = contacts_qs.filter(calls__status=status_filter)
+            contacts_qs = contacts_qs.filter(call_status=status_filter)
         return contacts_qs
 
     def perform_create(self, serializer):
