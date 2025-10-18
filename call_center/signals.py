@@ -1,7 +1,3 @@
-from django.db.models.signals import post_save
-from django.dispatch import receiver
-
-from call_center.models import Call
 import requests
 from django.db.models.signals import post_save, pre_save
 from django.dispatch import receiver

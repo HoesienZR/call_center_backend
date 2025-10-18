@@ -8,12 +8,6 @@ from .models import (
     ProjectMembership,
     Contact,
     Call,
-    CallEditHistory,
-    CallStatistics,
-    SavedSearch,
-    UploadedFile,
-    ExportReport,
-    ContactLog,
     AnswerChoice,
     Question, CallAnswer,Ticket
 
@@ -117,27 +111,8 @@ class CallAdmin(admin.ModelAdmin):
     list_filter = ('project', 'call_result', 'status', 'call_date')
     search_fields = ('contact__full_name', 'caller__username', 'notes')
     autocomplete_fields = ['contact', 'caller', 'project']
-    readonly_fields = ( 'edited_at', 'edited_by', 'original_data') # فیلدهای فقط خواندنی
+    readonly_fields = ( 'edited_at', 'edited_by',)
 
 
-# 3. ثبت سایر مدل‌ها با تنظیمات پیش‌فرض یا ساده
-@admin.register(CallEditHistory)
-class CallEditHistoryAdmin(admin.ModelAdmin):
-    list_display = ('call', 'edited_by', 'edit_date', 'field_name')
-    readonly_fields = [field.name for field in CallEditHistory._meta.fields] # همه فیلدها فقط خواندنی
 
-@admin.register(CallStatistics)
-class CallStatisticsAdmin(admin.ModelAdmin):
-    list_display = ('contact', 'project', 'total_calls', 'successful_calls', 'response_rate', 'last_call_date')
-    readonly_fields = ('updated_at',)
-
-@admin.register(ContactLog)
-class ContactLogAdmin(admin.ModelAdmin):
-    list_display = ('contact', 'action', 'performed_by', 'timestamp')
-    readonly_fields = [field.name for field in ContactLog._meta.fields]
-
-# ثبت مدل‌های باقی‌مانده با حالت پیش‌فرض
-admin.site.register(SavedSearch)
-admin.site.register(UploadedFile)
-admin.site.register(ExportReport)
 

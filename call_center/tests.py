@@ -1,5 +1,4 @@
 from django.test import TestCase
-from django.contrib.auth.models import User
 from rest_framework.test import APIClient
 from rest_framework.authtoken.models import Token
 from rest_framework import status
@@ -168,12 +167,6 @@ class ContactAPITestCase(TestCase):
             created_by=self.user
         )
 
-        ProjectCaller.objects.create(
-            project=self.project,
-            caller=self.user,
-            is_active=True
-        )
-
         self.contact = Contact.objects.create(
             project=self.project,
             full_name='John Doe',
@@ -201,8 +194,8 @@ from django.contrib.auth.models import User
 from io import BytesIO
 import pandas as pd
 
-from .models import Project, Contact, ProjectCaller
-from .excel_imports import import_callers_from_excel, import_contacts_from_excel
+from .models import Project, Contact
+from .excel_imports import  import_contacts_from_excel
 
 class ExcelImportTestCase(TestCase):
 

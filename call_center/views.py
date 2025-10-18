@@ -1,39 +1,34 @@
 from random import random
-from django.db.models import Count, Sum, Avg, Prefetch
 import numpy as np
 import pandas as pd
-from django.db.models import Count, Avg, Sum, Q, F, Case, When, IntegerField, FloatField
+from django.db.models import F, Case, When, IntegerField, FloatField
 from django.db.models.functions import Coalesce
 from django.db.models import Count, Avg, Q
 from django.db.models.aggregates import Sum
-from django.shortcuts import get_object_or_404
-from rest_framework import viewsets, status
+
 from rest_framework.response import Response
-from rest_framework.decorators import action, api_view, permission_classes
-from rest_framework.permissions import IsAuthenticated, IsAdminUser
+from rest_framework.decorators import  api_view, permission_classes
+from rest_framework.permissions import  IsAdminUser
 from rest_framework.decorators import action
-from django.db import transaction, models
+from django.db import transaction
 from datetime import datetime
-from .permission import  IsProjectCaller, IsProjectAdmin, IsProjectAdminOrCaller, IsReadOnlyOrProjectAdmin
-from .models import CustomUser as User, Question, CallAnswer, Ticket
+from .permission import IsProjectAdmin, IsProjectAdminOrCaller, IsReadOnlyOrProjectAdmin
+from .models import CustomUser as User, CallAnswer, Ticket
 import logging
 import random
-from django.db import connections
-from django.http import HttpResponse
 from rest_framework.pagination import PageNumberPagination
 from .models import (
-    Project, ProjectCaller, Contact, Call, CallEditHistory,
-    CallStatistics, SavedSearch, UploadedFile, ExportReport, CachedStatistics, ProjectMembership, CustomUser
+    Project, Contact, Call,
+     ProjectMembership, CustomUser
 )
 from .serializers import (
-    CustomUserSerializer, ProjectSerializer, ContactSerializer,
-    CallSerializer, CallEditHistorySerializer, CallStatisticsSerializer,
-    SavedSearchSerializer, UploadedFileSerializer, ExportReportSerializer, CachedStatisticsSerializer,
+     ProjectSerializer, ContactSerializer,
+    CallSerializer,
     CustomUserSerializer, CallExcelSerializer, AnswerChoiceSerializer,TicketSerializer
 )
 from .utils import (
-    validate_phone_number, normalize_phone_number, generate_secure_password,
-    is_caller_user, assign_contacts_randomly, validate_excel_data, clean_string_field,generate_username
+    validate_phone_number, normalize_phone_number,
+  clean_string_field,generate_username
 )
 from drf_excel.mixins import XLSXFileMixin
 from drf_excel.renderers import XLSXRenderer
@@ -49,17 +44,9 @@ logger = logging.getLogger(__name__)
 from rest_framework import viewsets
 from rest_framework.permissions import IsAuthenticated
 from django.db.models import Prefetch
-from .models import Question, AnswerChoice  # Adjust imports as needed
-from .serializers import QuestionSerializer  # Assumes writable serializer with nested choices
+from .models import Question, AnswerChoice
+from .serializers import QuestionSerializer
 
-
-def check_postgresql_connection(request):
-    try:
-        connection = connections['default']
-        connection.ensure_connection()
-        return HttpResponse("PostgreSQL connection successful")
-    except Exception as e:
-        return HttpResponse(f"PostgreSQL connection failed: {e}")
 class UserViewSet(viewsets.ReadOnlyModelViewSet):
     """
     ViewSet برای مشاهده کاربران.
@@ -515,15 +502,6 @@ class ProjectViewSet(viewsets.ModelViewSet):
 
             with transaction.atomic():
                 # ذخیره اطلاعات فایل آپلود شده
-                uploaded_file = UploadedFile.objects.create(
-                    file_name=file.name,
-                    file_path=f"uploads/callers/{file.name}",
-                    file_type='callers',
-                    records_count=len(df),
-                    project=project,
-                    uploaded_by=request.user
-                )
-
                 for index, row in df.iterrows():
                     try:
                         # تمیز کردن شماره تلفن
@@ -624,7 +602,6 @@ class ProjectViewSet(viewsets.ModelViewSet):
             # آماده کردن پاسخ
             response_data = {
                 'message': 'فایل تماس‌گیرندگان با موفقیت پردازش شد',
-                'file_id': uploaded_file.id,
                 'total_records': len(df),
                 'successful_count': len(successful_callers),
                 'updated_count': len(updated_callers),
@@ -816,12 +793,6 @@ class ProjectViewSet(viewsets.ModelViewSet):
         return Response({"message": "گزارش با موفقیت ایجاد شد.", "download_url": "..."})
 
 
-class ProjectCallerViewSet(viewsets.ModelViewSet):
-    queryset = ProjectCaller.objects.all()
-    serializer_class = ProjectSerializer
-    permission_classes = [IsProjectAdmin,IsAuthenticated]
-
-
 class ContactViewSet(viewsets.ModelViewSet):
     queryset = Contact.objects.all()
     serializer_class = ContactSerializer
@@ -1005,14 +976,6 @@ class ContactViewSet(viewsets.ModelViewSet):
 
             with transaction.atomic():
                 # ذخیره اطلاعات فایل آپلود شده
-                uploaded_file = UploadedFile.objects.create(
-                    file_name=file.name,
-                    file_path=f"uploads/contacts/{file.name}",
-                    file_type='contacts',
-                    records_count=len(df),
-                    project=project,
-                    uploaded_by=request.user
-                )
 
                 for index, row in df.iterrows():
                     try:
@@ -1121,7 +1084,6 @@ class ContactViewSet(viewsets.ModelViewSet):
             # آماده کردن پاسخ با تبدیل ایمن به JSON
             response_data = {
                 'message': 'فایل مخاطبین با موفقیت پردازش شد',
-                'file_id': uploaded_file.id,
                 'total_records': len(df),
                 'successful_count': len(successful_contacts),
                 'updated_count': len(updated_contacts),
@@ -1513,14 +1475,6 @@ class CallViewSet(viewsets.ModelViewSet):
         # Manually save changes and create CallEditHistory
         for attr, value in serializer.validated_data.items():
             if hasattr(call, attr) and getattr(call, attr) != value:
-                CallEditHistory.objects.create(
-                    call=call,
-                    edited_by=request.user,
-                    field_name=attr,
-                    old_value=str(getattr(call, attr)),
-                    new_value=str(value),
-                    edit_reason=request.data.get("edit_reason", "")
-                )
                 setattr(call, attr, value)
 
         call.edited_at = datetime.now()
@@ -1583,115 +1537,6 @@ class CallViewSet(viewsets.ModelViewSet):
 
         call.save()
         return Response(self.get_serializer(call).data, status=status.HTTP_200_OK)
-
-
-class CallEditHistoryViewSet(viewsets.ReadOnlyModelViewSet):
-    queryset = CallEditHistory.objects.all()
-    serializer_class = CallEditHistorySerializer
-    permission_classes = [IsAdminUser]
-
-
-class CallStatisticsViewSet(viewsets.ReadOnlyModelViewSet):
-    queryset = CallStatistics.objects.all()
-    serializer_class = CallStatisticsSerializer
-    permission_classes = [IsAdminUser]
-
-
-class SavedSearchViewSet(viewsets.ModelViewSet):
-    queryset = SavedSearch.objects.all()
-    serializer_class = SavedSearchSerializer
-    permission_classes = [IsAuthenticated]
-
-    def perform_create(self, serializer):
-        serializer.save(user=self.request.user)
-
-    def get_queryset(self):
-        queryset = super().get_queryset()
-        if self.request.user.is_staff:
-            return queryset
-        return queryset.filter(user=self.request.user) | queryset.filter(is_public=True)
-
-
-class UploadedFileViewSet(viewsets.ReadOnlyModelViewSet):
-    queryset = UploadedFile.objects.all()
-    serializer_class = UploadedFileSerializer
-    permission_classes = [IsAuthenticated, IsProjectAdmin]
-
-    def get_queryset(self):
-        user = self.request.user
-        if user.is_superuser:
-            return UploadedFile.objects.all()
-        admin_projects = Project.objects.filter(projectmembership__user=user, projectmembership__role='admin')
-        return UploadedFile.objects.filter(project__in=admin_projects)
-
-    @action(detail=False, methods=["post"], url_path='contacts')
-    def upload_contacts(self, request):
-        project_id = request.data.get("project_id")
-        if not project_id:
-            return Response({"error": "شناسه پروژه الزامی است"}, status=status.HTTP_400_BAD_REQUEST)
-
-        try:
-            project = Project.objects.get(id=project_id)
-            # بررسی دسترسی ادمین بودن در پروژه
-            if not (request.user.is_superuser or ProjectMembership.objects.filter(project=project, user=request.user,
-                                                                                  role='admin').exists()):
-                return Response({"detail": "شما ادمین این پروژه نیستید و نمی‌توانید فایل آپلود کنید."},
-                                status=status.HTTP_403_FORBIDDEN)
-        except Project.DoesNotExist:
-            return Response({"error": "پروژه یافت نشد"}, status=status.HTTP_404_NOT_FOUND)
-
-        # --- اینجا کد کامل و پیچیده آپلود فایل از کد قبلی شما قرار می‌گیرد ---
-        # این کد نیاز به تغییرات جزئی داشت تا به جای ProjectCaller از ProjectMembership استفاده کند.
-        # من این تغییرات را اعمال کرده‌ام.
-
-        file = request.FILES.get("file")
-        if not file:
-            return Response({"error": "فایل ارسال نشده است"}, status=status.HTTP_400_BAD_REQUEST)
-
-        # ... (کد کامل پردازش فایل اکسل و ساخت مخاطبین) ...
-        # در بخش تخصیص تماس‌گیرنده:
-        # به جای: if is_caller_user(assigned_caller) and ProjectCaller.objects.filter(...)
-        # استفاده کنید از:
-        # if ProjectMembership.objects.filter(project=project, user=assigned_caller, role='caller').exists():
-        #     contact.assigned_caller = assigned_caller
-        # else:
-        #     errors.append(...)
-
-        # و در بخش تخصیص تصادفی:
-        # به جای: assign_contacts_randomly(project, unassigned_contacts)
-        # این تابع باید بازنویسی شود تا لیست تماس‌گیرندگان را از ProjectMembership بخواند.
-
-        return Response({"message": "فایل با موفقیت پردازش شد."})  # پیام موفقیت‌آمیز
-
-#TODO this is also useless
-class ExportReportViewSet(viewsets.ReadOnlyModelViewSet):
-    queryset = ExportReport.objects.all()
-    serializer_class = ExportReportSerializer
-    permission_classes = [IsAdminUser]
-    #TODO this is useless too
-    @action(detail=False, methods=["post"], permission_classes=[IsAdminUser])
-    def export_contacts(self, request):
-        # Implement export logic here (similar to Flask example)
-        return Response({"detail": "Export contacts endpoint not yet implemented."},
-                        status=status.HTTP_501_NOT_IMPLEMENTED)
-    #TODO this is also useless
-    @action(detail=False, methods=["post"], permission_classes=[IsAuthenticated])
-    def export_calls(self, request):
-        # Implement export logic here (similar to Flask example)
-        return Response({"detail": "Export calls endpoint not yet implemented."},
-                        status=status.HTTP_501_NOT_IMPLEMENTED)
-    #TODO  this useless must get deleted
-    @action(detail=True, methods=["get"], permission_classes=[IsAuthenticated])
-    def download(self, request, pk=None):
-        # Implement download logic here (similar to Flask example)
-        return Response({"detail": "Download endpoint not yet implemented."}, status=status.HTTP_501_NOT_IMPLEMENTED)
-
-
-class CachedStatisticsViewSet(viewsets.ReadOnlyModelViewSet):
-    queryset = CachedStatistics.objects.all()
-    serializer_class = CachedStatisticsSerializer
-    permission_classes = [IsAdminUser]
-
 
 #TODO request must change to get and start and end date must change also and queris must get optimised
 @api_view(['POST'])

@@ -7,7 +7,7 @@ import requests
 import json
 
 # تنظیمات
-BASE_URL = "https://8000-iv9nvny36bk7nz25ctdns-e56203cc.manusvm.computer/api"
+BASE_URL = ""
 ADMIN_USERNAME = "admin"
 ADMIN_PASSWORD = "admin123"
 

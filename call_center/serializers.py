@@ -4,12 +4,7 @@ from persiantools.jdatetime import JalaliDate
 from django.db.models import Count, Prefetch
 from .models import (
     CustomUser,
-    CallEditHistory,
-    CallStatistics,
-    SavedSearch,
-    UploadedFile,
-    ExportReport,
-    CachedStatistics, Question, AnswerChoice, CallAnswer, Ticket,
+     Question, AnswerChoice, CallAnswer, Ticket,
 )
 from .models import Call, Project, ProjectMembership
 from rest_framework import serializers
@@ -524,54 +519,11 @@ class CallSerializer(serializers.ModelSerializer):
     def validate(self, data):
         # ... (کد validate شما در اینجا قرار می‌گیرد)
         return data
-
-#TODO maybe this is useless
-# 6. سایر سریالایزرها با ارجاعات اصلاح شده
-class CallEditHistorySerializer(serializers.ModelSerializer):
-    edited_by_id = serializers.PrimaryKeyRelatedField(
-        queryset=CustomUser.objects.all(), source='edited_by', write_only=True
-    )
-    class Meta:
-        model = CallEditHistory
-        fields = '__all__'
-#TODO  maybe and this also is useless
-class CallStatisticsSerializer(serializers.ModelSerializer):
-    class Meta:
-        model = CallStatistics
-        fields = '__all__'
-#TODO maybe and this also be useless too
-class SavedSearchSerializer(serializers.ModelSerializer):
-    user_id = serializers.PrimaryKeyRelatedField(
-        queryset=CustomUser.objects.all(), source='user', write_only=True
-    )
-    search_criteria = serializers.JSONField(required=False)
-    class Meta:
-        model = SavedSearch
-        fields = '__all__'
 #TODO maybe this be useless too
 class UploadedFileSerializer(serializers.ModelSerializer):
     uploaded_by_id = serializers.PrimaryKeyRelatedField(
         queryset=CustomUser.objects.all(), source='uploaded_by', write_only=True
     )
-    class Meta:
-        model = UploadedFile
-        fields = '__all__'
-#TODO maybe this be useless to
-class ExportReportSerializer(serializers.ModelSerializer):
-    exported_by_id = serializers.PrimaryKeyRelatedField(
-        queryset=CustomUser.objects.all(), source='exported_by', write_only=True
-    )
-    filters = serializers.JSONField(required=False)
-    class Meta:
-        model = ExportReport
-        fields = '__all__'
-#TODO maybe this is useless also
-class CachedStatisticsSerializer(serializers.ModelSerializer):
-    stat_value = serializers.JSONField(required=False)
-    class Meta:
-        model = CachedStatistics
-        fields = '__all__'
-
 
 class GeneralStatisticsSerializer(serializers.Serializer):
     total_contacts = serializers.IntegerField()
@@ -613,11 +565,7 @@ class CallerPerformanceSerializer(serializers.Serializer):
     avg_duration_formatted = serializers.CharField()
     calls_with_duration = serializers.IntegerField()
 
-class ProjectStatisticsSerializer(serializers.Serializer):
-    project_id = serializers.IntegerField()
-    project_name = serializers.CharField()
-    general_statistics = GeneralStatisticsSerializer()
-    caller_performance = CallerPerformanceSerializer(many=True)
+
 
 
 class CallExcelSerializer(serializers.ModelSerializer):
