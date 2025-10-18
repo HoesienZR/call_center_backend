@@ -1,16 +1,9 @@
 # call_center/serializers.py
 import re
 from persiantools.jdatetime import JalaliDate
-from django.db import transaction
 from django.db.models import Count, Prefetch
-from rest_framework import serializers
-from django.conf import settings
 from .models import (
     CustomUser,
-    Project,
-    ProjectMembership,
-    Contact,
-    Call,
     CallEditHistory,
     CallStatistics,
     SavedSearch,
@@ -18,9 +11,7 @@ from .models import (
     ExportReport,
     CachedStatistics, Question, AnswerChoice, CallAnswer, Ticket,
 )
-from rest_framework import serializers
-from .models import Call, Contact, Project, ProjectMembership
-import json
+from .models import Call, Project, ProjectMembership
 from rest_framework import serializers
 # 1. سریالایزر برای مدل کاربر سفارشی
 class CustomUserSerializer(serializers.ModelSerializer):
@@ -41,7 +32,6 @@ class CustomUserSerializer(serializers.ModelSerializer):
         )
     def get_persian_date_joined(self, obj):
         return str(JalaliDate((obj.date_joined.date())))
-# your_app/serializers.py
 
 class AnswerChoiceSerializer(serializers.ModelSerializer):
     """Serializer for answer choices."""
@@ -95,7 +85,6 @@ class ProjectMembershipSerializer(serializers.ModelSerializer):
         fields = ('id', 'project_id', 'user', 'user_id', 'role', 'assigned_at')
         read_only_fields = ('assigned_at',)
 
-# 3. سریالایزر پروژه با اطلاعات اعضا
 class ProjectSerializer(serializers.ModelSerializer):
     """
     سریالایزر برای مدل Project.
@@ -169,11 +158,6 @@ class ProjectSerializer(serializers.ModelSerializer):
     def get_persian_created_at(self,obj):
         return str(JalaliDate(obj.created_at.date()))
 
-
-# 4. سریالایزر مخاطبین
-
-
-# فایل: serializers.py
 
 from rest_framework import serializers
 from .models import Contact, Project, CustomUser, ProjectMembership  # ProjectMembership را اضافه کنید
@@ -483,7 +467,7 @@ class CallSerializer(serializers.ModelSerializer):
     """
     سریالایزر برای مدل Call.
     """
-    #todo this need to get damn optimised as ssoooooon as possible
+    #todo this need to get damn optimised as soooooon as possible
     answers = CallAnswerSerializer(many=True, required=False)
     contact = ContactSerializer(read_only=True)
     contact_id = serializers.PrimaryKeyRelatedField(
@@ -694,4 +678,3 @@ class CallExcelSerializer(serializers.ModelSerializer):
             selected_choice_text = getattr(answer, 'selected_choice', '')  # Adjust attribute name if different
             formatted_answers.append(f"{question_text} {selected_choice_text}  |")
         return "\n".join(formatted_answers) if formatted_answers else ""
-# 2. سریالایزر برای مدیریت نقش کاربران در پروژه

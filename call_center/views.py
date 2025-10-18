@@ -2071,7 +2071,7 @@ def project_statistics_api(request, project_id):
             status=status.HTTP_500_INTERNAL_SERVER_ERROR
         )
 
-
+#TODO this must must go utility or tools a
 def has_project_access(user, project):
     """بررسی دسترسی کاربر به پروژه"""
     if user.is_superuser:
@@ -2083,7 +2083,7 @@ def has_project_access(user, project):
         user=user
     ).exists()
 
-
+#TODO this must go to another directory
 def get_project_general_statistics(project):
     """دریافت آمار کلی پروژه"""
 
@@ -2112,7 +2112,7 @@ def get_project_general_statistics(project):
         "answer_rate": round(answer_rate, 2)
     }
 
-
+#TODO this must go to another directory
 def get_caller_performance(project):
     """دریافت عملکرد تماس‌گیرندگان پروژه"""
 
@@ -2199,7 +2199,7 @@ def get_caller_performance(project):
 
     return caller_performance
 
-
+#TODO must change path
 def format_duration(seconds):
     """تبدیل ثانیه به فرمت دقیقه:ثانیه"""
     if not seconds:

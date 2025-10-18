@@ -385,6 +385,7 @@ class Call(models.Model):
         )
         stats.update_statistics()
 
+#TODO this model must get deleted
 class CallEditHistory(models.Model):
     """مدل برای تاریخچه ویرایش تماس‌ها"""
     call = models.ForeignKey(Call, on_delete=models.CASCADE, related_name='edit_history', verbose_name="تماس")
@@ -622,6 +623,8 @@ class ContactLog(models.Model):
 
     def __str__(self):
         return f"{self.action} - {self.contact.full_name} at {self.timestamp}"
+
+#TODO from this
 class Question(models.Model):
     """مدل برای سوالات مرتبط با پروژه"""
     project = models.ForeignKey(Project, on_delete=models.CASCADE, related_name='questions', verbose_name="پروژه")
@@ -630,12 +633,6 @@ class Question(models.Model):
     class Meta:
         verbose_name = "سوال"
         verbose_name_plural = "سوالات"
-
-    def clean(self):
-        # Enforce at most 5 questions per project
-        if self.project.questions.count() >= 5:
-            raise ValidationError("هر پروژه حداکثر ۵ سوال می‌تواند داشته باشد.")
-        super().clean()
 
     def __str__(self):
         return self.text
