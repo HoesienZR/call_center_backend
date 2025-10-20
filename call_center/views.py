@@ -1828,6 +1828,14 @@ class CallExcelViewSet(XLSXFileMixin,viewsets.ReadOnlyModelViewSet):
         # دریافت پروژه‌هایی که کاربر در آن‌ها نقش دارد
         project_ids = ProjectMembership.objects.filter(user=user).values_list('project_id', flat=True)
         return self.queryset.filter(project__id__in=project_ids)
+    @action(detail=False,methods=['get'])
+    def specific_user_report(self,request,*args, **kwargs):
+        contact_id = self.request.GET.get('contact_id',None)
+        if contact_id is None :
+            return Response({'detail':'no contact requested'},status=status.HTTP_400_BAD_REQUEST)
+        specific_contact_call = self.get_queryset().filter(contact_id=contact_id)
+        serializer = self.get_serializer(specific_contact_call,many=True)
+        return Response(serializer.data,status=status.HTTP_200_OK)
 
 
 @api_view(['GET', 'POST'])
