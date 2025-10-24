@@ -839,7 +839,10 @@ class ContactViewSet(viewsets.ModelViewSet):
         سفارشی‌سازی کوئری‌ست برای فیلتر مخاطبین بر اساس پروژه، وضعیت تماس و دسترسی کاربر.
         """
         queryset = self.queryset  # e.g., Contact.objects.all()
-        user = self.request.user
+        user = get_object_or_404(CustomUser,id=self.request.user.id)
+
+        print(type(user))
+        print(user)
         status_filter = self.request.query_params.get("status")  # Use 'status', not 'call_status'
         project_id = self.request.query_params.get('project_id')
         if project_id:
@@ -859,10 +862,11 @@ class ContactViewSet(viewsets.ModelViewSet):
                     # ادمین همه مخاطبین پروژه را می‌بیند
                     contacts_qs = queryset.filter(project=project)
                 else:
+                    assigned_caller_filter = Q(assigned_caller=user)
+                    project_filter = Q(project=project)
                     # تماس‌گیرنده فقط مخاطبین تخصیص‌یافته به خودش را می‌بیند
                     contacts_qs = queryset.filter(
-                        project=project,
-                        assigned_caller=user
+                        project_filter & assigned_caller_filter
                     )
                 contacts_qs = contacts_qs.prefetch_related(
                     'calls__answers__selected_choice',
