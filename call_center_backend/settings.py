@@ -20,7 +20,7 @@ from decouple import config
 load_dotenv()
 
 # TSMS configuration
-
+print(os.getenv('envs', 'my-python-app'), flush=True)
 TSMS_USERNAME = config(os.environ.get('TSMS_USERNAME'))
 TSMS_PASSWORD = config(os.environ.get('TSMS_PASSWORD'))
 TSMS_FROM_NUMBER = config(os.environ.get('TSMS_FROM_NUMBER'))
