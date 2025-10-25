@@ -20,11 +20,10 @@ from decouple import config
 load_dotenv()
 
 # TSMS configuration
-TSMS_USERNAME = config(os.getenv('TSMS_USERNAME'))
-TSMS_PASSWORD = config(os.getenv('TSMS_PASSWORD'))
-TSMS_FROM_NUMBER = config(os.getenv('TSMS_FROM_NUMBER'))
-DEV_PHONE = config(os.getenv('DEV_PHONE'))
-
+TSMS_USERNAME = os.getenv("TSMS_USERNAME")
+TSMS_PASSWORD = os.getenv('TSMS_PASSWORD')
+TSMS_FROM_NUMBER =os.getenv('TSMS_FROM_NUMBER')
+DEV_PHONE = os.getenv('DEV_PHONE')
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
 
