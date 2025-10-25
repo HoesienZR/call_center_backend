@@ -20,7 +20,7 @@ from decouple import config
 load_dotenv()
 
 # TSMS configuration
-print(os.getenv('LIARA_URL', 'my-python-app'), flush=True)
+print(os.getenv('TSMS_USERNAME', ), flush=True)
 TSMS_USERNAME = config(os.environ.get('TSMS_USERNAME'))
 TSMS_PASSWORD = config(os.environ.get('TSMS_PASSWORD'))
 TSMS_FROM_NUMBER = config(os.environ.get('TSMS_FROM_NUMBER'))
