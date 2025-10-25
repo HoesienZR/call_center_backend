@@ -20,8 +20,7 @@ from decouple import config
 load_dotenv()
 
 # TSMS configuration
-print(os.getenv('TSMS_USERNAME', ), flush=True)
-TSMS_USERNAME = config(os.environ.get('TSMS_USERNAME'))
+TSMS_USERNAME = os.getenv('TSMS_USERNAME',)
 TSMS_PASSWORD = config(os.environ.get('TSMS_PASSWORD'))
 TSMS_FROM_NUMBER = config(os.environ.get('TSMS_FROM_NUMBER'))
 DEV_PHONE = config(os.environ.get('DEV_PHONE'))
