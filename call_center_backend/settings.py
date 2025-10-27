@@ -16,7 +16,7 @@ import dj_database_url
 from dotenv import load_dotenv
 from decouple import config
 
-
+import os
 load_dotenv()
 
 # TSMS configuration
@@ -53,10 +53,8 @@ CORS_ALLOW_ALL_ORIGINS = True
 CORS_ALLOWED_ORIGINS = [
     "http://localhost:5173",
     "http://127.0.0.1:5173",
-    "http://127.0.0.1:3000",
     "http://192.168.20.28:5173",
     'http://localhost:5173',
-    'http://localhost:3000',
     'https://callcenter.liara.run'
 ]
 CORS_ALLOW_CREDENTIALS = True
@@ -183,8 +181,6 @@ MEDIA_ROOT = os.path.join(BASE_DIR, 'media')
 MEDIA_URL = '/media/'
 
 # Celery settings
-CELERY_BROKER_URL = 'redis://localhost:6379/0'  # یا RabbitMQ
-CELERY_RESULT_BACKEND = 'redis://localhost:6379/0'
 CELERY_ACCEPT_CONTENT = ['json']
 CELERY_TASK_SERIALIZER = 'json'
 CELERY_RESULT_SERIALIZER = 'json'
@@ -201,7 +197,7 @@ CELERY_BEAT_SCHEDULE = {
 CACHES = {
     "default": {
         "BACKEND": "django_redis.cache.RedisCache",
-        "LOCATION": "redis://127.0.0.1:6379/1",  # دیتابیس شماره 1
+        "LOCATION": os.getenv("REDIS_URL"),
         "OPTIONS": {
             "CLIENT_CLASS": "django_redis.client.DefaultClient",
             "CONNECTION_POOL_KWARGS": {"max_connections": 100},
@@ -224,16 +220,3 @@ CACHES = {
 #       'PORT': '5432',  # پورت پیش‌فرض PostgreSQL
 #        }
 #    }
-
-DATABASES = {
-    'default': {
-       'ENGINE': 'django.db.backends.postgresql',
-        'NAME': 'call_center_db',
-     'USER': 'postgres',
-       'PASSWORD': '123456',
-       'HOST': 'localhost',  # یا IP سرور دیتابیس
-       'PORT': '5432',  # پورت پیش‌فرض PostgreSQL
-        }
-    }
-
-
