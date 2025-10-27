@@ -24,6 +24,7 @@ TSMS_USERNAME = os.getenv("TSMS_USERNAME")
 TSMS_PASSWORD = os.getenv('TSMS_PASSWORD')
 TSMS_FROM_NUMBER =os.getenv('TSMS_FROM_NUMBER')
 DEV_PHONE = os.getenv('DEV_PHONE')
+
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
 
@@ -52,8 +53,10 @@ CORS_ALLOW_ALL_ORIGINS = True
 CORS_ALLOWED_ORIGINS = [
     "http://localhost:5173",
     "http://127.0.0.1:5173",
+    "http://127.0.0.1:3000",
     "http://192.168.20.28:5173",
     'http://localhost:5173',
+    'http://localhost:3000',
     'https://callcenter.liara.run'
 ]
 CORS_ALLOW_CREDENTIALS = True
@@ -195,9 +198,20 @@ CELERY_BEAT_SCHEDULE = {
     },
 }
 
-DATABASES = {
-   'default': dj_database_url.config(default=os.environ.get("DATABASE_URL")),
- }
+CACHES = {
+    "default": {
+        "BACKEND": "django_redis.cache.RedisCache",
+        "LOCATION": "redis://127.0.0.1:6379/1",  # دیتابیس شماره 1
+        "OPTIONS": {
+            "CLIENT_CLASS": "django_redis.client.DefaultClient",
+            "CONNECTION_POOL_KWARGS": {"max_connections": 100},
+        }
+    }
+}
+
+ # DATABASES = {
+ #   'default': dj_database_url.config(default=os.environ.get("DATABASE_URL")),
+ # }
 
 
 #DATABASES = {
@@ -210,4 +224,16 @@ DATABASES = {
 #       'PORT': '5432',  # پورت پیش‌فرض PostgreSQL
 #        }
 #    }
+
+DATABASES = {
+    'default': {
+       'ENGINE': 'django.db.backends.postgresql',
+        'NAME': 'call_center_db',
+     'USER': 'postgres',
+       'PASSWORD': '123456',
+       'HOST': 'localhost',  # یا IP سرور دیتابیس
+       'PORT': '5432',  # پورت پیش‌فرض PostgreSQL
+        }
+    }
+
 
