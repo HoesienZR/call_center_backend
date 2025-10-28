@@ -1,4 +1,4 @@
-# call_center/tasks.py
+
 from django.utils import timezone
 from datetime import timedelta
 from .models import Contact

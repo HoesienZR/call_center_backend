@@ -28,7 +28,7 @@ DEV_PHONE = config('DEV_PHONE')
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
 
-AUTH_USER_MODEL = 'call_center.CustomUser'
+AUTH_USER_MODEL = 'users.CustomUser'
 # Quick-start development settings - unsuitable for production
 # See https://docs.djangoproject.com/en/5.2/howto/deployment/checklist/
 
@@ -88,12 +88,17 @@ INSTALLED_APPS = [
     'rest_framework',
     'rest_framework.authtoken',
     'corsheaders',
-    'call_center',
     'django_celery_beat',
     "silk",
     'import_export',
     'drf_spectacular',
-
+    'call_center',
+    'projects',
+    'users',
+    'ticket',
+    "calls",
+    "contacts",
+    "files",
 ]
 USE_TZ = True
 
@@ -201,25 +206,25 @@ CELERY_BEAT_SCHEDULE = {
 # }
 
 
-DATABASES = {
-    'default': {
-       'ENGINE': 'django.db.backends.postgresql',
-        'NAME': 'call_center_db',
-     'USER': 'postgres',
-       'PASSWORD': '@Mirzr4848',
-       'HOST': 'localhost',  # یا IP سرور دیتابیس
-       'PORT': '5432',  # پورت پیش‌فرض PostgreSQL
-        }
-    }
-
-
 # DATABASES = {
 #     'default': {
 #        'ENGINE': 'django.db.backends.postgresql',
 #         'NAME': 'call_center_db',
 #      'USER': 'postgres',
-#        'PASSWORD': '123456',
+#        'PASSWORD': '@Mirzr4848',
 #        'HOST': 'localhost',  # یا IP سرور دیتابیس
 #        'PORT': '5432',  # پورت پیش‌فرض PostgreSQL
 #         }
 #     }
+
+
+DATABASES = {
+    'default': {
+       'ENGINE': 'django.db.backends.postgresql',
+        'NAME': 'call_center_db',
+     'USER': 'postgres',
+       'PASSWORD': '3831',
+       'HOST': 'localhost',
+       'PORT': '5432',
+        }
+    }
