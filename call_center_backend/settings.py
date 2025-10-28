@@ -28,7 +28,7 @@ DEV_PHONE = config('DEV_PHONE')
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
 
-AUTH_USER_MODEL = 'call_center.CustomUser'
+AUTH_USER_MODEL = 'users.CustomUser'
 # Quick-start development settings - unsuitable for production
 # See https://docs.djangoproject.com/en/5.2/howto/deployment/checklist/
 
@@ -88,12 +88,17 @@ INSTALLED_APPS = [
     'rest_framework',
     'rest_framework.authtoken',
     'corsheaders',
-    'call_center',
     'django_celery_beat',
     "silk",
     'import_export',
     'drf_spectacular',
-
+    'call_center',
+    'projects',
+    'users',
+    'ticket',
+    "calls",
+    "contacts",
+    "files",
 ]
 USE_TZ = True
 

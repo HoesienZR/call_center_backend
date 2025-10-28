@@ -19,18 +19,24 @@ questions_router.register(r'questions', QuestionViewSet, basename='project-quest
 
 choices_router = NestedSimpleRouter(questions_router, r'questions', lookup='question')
 choices_router.register(r'choices', AnswerChoiceViewSet, basename='question-choices')
+
 router.register(r'users', views.UserViewSet)
 
 router.register(r'project-callers', views.ProjectCallerViewSet)
 router.register(r'contacts', views.ContactViewSet)
 router.register(r'calls', views.CallViewSet)
+
 router.register(r'call-edit-history', views.CallEditHistoryViewSet)
 router.register(r'call-statistics', views.CallStatisticsViewSet)
+
+
 router.register(r'saved-searches', views.SavedSearchViewSet)
+
 router.register(r'uploaded-files', views.UploadedFileViewSet)
+#
 router.register(r'export-reports', views.ExportReportViewSet)
 router.register(r'cached-statistics', views.CachedStatisticsViewSet)
-
+#
 router.register(r"tickets",views.TicketViewSet)
 router.register(r'excel',views.CallExcelViewSet,basename='excel')
 
