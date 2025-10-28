@@ -54,19 +54,6 @@ class Contact(models.Model):
     def __str__(self):
         return f"{self.full_name} - {self.phone}"
 
-    def get_custom_fields(self):
-        if self.custom_fields:
-            try:
-                return json.loads(self.custom_fields)
-            except json.JSONDecodeError:
-                return {}
-        return {}
-
-    def set_custom_fields(self, fields_dict):
-        if fields_dict:
-            self.custom_fields = json.dumps(fields_dict, ensure_ascii=False)
-        else:
-            self.custom_fields = ""
 
     def get_call_statistics(self):
         try:
