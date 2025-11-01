@@ -29,7 +29,6 @@ logger = logging.getLogger(__name__)
 
 
 # Create your views here.
-User = settings.AUTH_USER_MODEL
 
 
 class ContactViewSet(viewsets.ModelViewSet):

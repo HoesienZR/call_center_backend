@@ -1,5 +1,4 @@
 from rest_framework_nested.routers import NestedSimpleRouter
-from unicodedata import lookup
 
 import views
 from projects.urls import router

@@ -1,4 +1,3 @@
-from rest_framework.routers import DefaultRouter
 from projects.urls import router
 from . import views
 
