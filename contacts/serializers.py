@@ -1,3 +1,5 @@
+import re
+
 from persiantools.jdatetime import JalaliDate
 from rest_framework import serializers
 
@@ -17,18 +19,11 @@ class ContactSerializer(serializers.ModelSerializer):
     )
 
     # فیلدهای اضافی برای نمایش بهتر در فرانت‌اند
-    assigned_caller = serializers.SerializerMethodField(read_only=True)
-    assigned_caller_phone = serializers.SerializerMethodField(read_only=True)
-    can_call = serializers.SerializerMethodField(read_only=True)
-    call_statistics = serializers.SerializerMethodField(read_only=True)
+    assigned_caller_phone = serializers.CharField(source='assigned_caller.phone',read_only=True)
     call_notes = serializers.SerializerMethodField(read_only=True)
     # این فیلد برای تخصیص توسط ادمین استفاده می‌شود
     caller_phone_number = serializers.CharField(write_only=True, required=False, allow_blank=True)
     created_by = serializers.PrimaryKeyRelatedField(read_only=True)
-    contact_calls_count = serializers.SerializerMethodField()
-    contacts_calls_answered_count = serializers.SerializerMethodField()
-    contact_calls_not_answered_count = serializers.SerializerMethodField()
-    contacts_calls_rate = serializers.SerializerMethodField()
     persian_updated_at = serializers.SerializerMethodField(read_only=True)
     persian_created_by = serializers.SerializerMethodField(read_only=True)
 
@@ -37,8 +32,8 @@ class ContactSerializer(serializers.ModelSerializer):
         fields = (
             'id', 'project_id', 'full_name', 'phone', 'email',
             'address', 'assigned_caller_id', 'assigned_caller',
-            'assigned_caller_phone', 'can_call', 'call_status',
-            'call_statistics', 'call_notes', 'custom_fields',
+            'assigned_caller_phone', 'call_status',
+             'call_notes', 'custom_fields',
             'is_active', 'created_at', 'updated_at',
             'caller_phone_number', 'created_by',
             "contact_calls_count", 'contacts_calls_answered_count',
@@ -127,66 +122,6 @@ class ContactSerializer(serializers.ModelSerializer):
         if obj.assigned_caller and hasattr(obj.assigned_caller, 'phone_number'):
             return obj.assigned_caller.phone_number
         return None
-
-    def get_can_call(self, obj):
-        """آیا کاربر فعلی می‌تواند با این مخاطب تماس بگیرد"""
-        request = self.context.get('request')
-        if not request or not request.user.is_authenticated:
-            return False
-
-        user = request.user
-
-        # سوپر یوزر همیشه می‌تواند تماس بگیرد
-        if user.is_superuser:
-            return True
-
-        # بررسی عضویت در پروژه
-        try:
-            membership = ProjectMembership.objects.get(project=obj.project, user=user)
-
-            # ادمین یا تماس‌گیرنده تخصیص یافته می‌توانند تماس بگیرند
-            if membership.role == 'admin':
-                # ادمین فقط با مخاطبین تخصیص یافته به خودش یا بدون تخصیص
-                if not obj.assigned_caller or obj.assigned_caller == user:
-                    return True
-                # اگر ادمین شماره تلفن دارد، با مطابقت شماره تلفن چک کن
-                if hasattr(user, 'phone') and user.phone and obj.assigned_caller:
-                    user_phone = re.sub(r'\D', '', user.phone)  # حذف کاراکترهای غیر عددی
-                    if hasattr(obj.assigned_caller, 'phone') and obj.assigned_caller.phone:
-                        assigned_phone = re.sub(r'\D', '', obj.assigned_caller.phone)
-                        return user_phone == assigned_phone
-                return False
-
-            elif membership.role == 'caller':
-                # تماس‌گیرنده فقط با مخاطبین تخصیص یافته به خودش
-                return obj.assigned_caller == user
-
-        except ProjectMembership.DoesNotExist:
-            pass
-
-        return False
-
-    def get_call_statistics(self, obj):
-        """آمار تماس‌های مخاطب"""
-        try:
-            from django.db.models import Count, Q
-            calls = obj.calls.all()
-
-            return {
-                'total_calls': calls.count(),
-                'answered_calls': calls.filter(call_result='answered').count(),
-                'unanswered_calls': calls.filter(call_result='no_answer').count(),
-                'unreachable_calls': calls.filter(
-                    Q(call_result='unreachable') | Q(call_result='wrong_number')
-                ).count(),
-            }
-        except:
-            return {
-                'total_calls': 0,
-                'answered_calls': 0,
-                'unanswered_calls': 0,
-                'unreachable_calls': 0,
-            }
 
     def get_call_notes(self, obj):
         """یادداشت‌های تماس"""
@@ -289,3 +224,4 @@ class ContactSerializer(serializers.ModelSerializer):
                 pass
 
         return super().update(instance, validated_data)
+
