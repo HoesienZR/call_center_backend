@@ -1,7 +1,9 @@
 from rest_framework import serializers
 from calls.models import Call
+from django.contrib.auth import get_user_model
 from persiantools.jdatetime import JalaliDate
 from .models import *
+
 
 
 class AnswerChoiceSerializer(serializers.ModelSerializer):
@@ -21,7 +23,7 @@ class QuestionSerializer(serializers.ModelSerializer):
 # TODO maybe and this also be useless too
 class SavedSearchSerializer(serializers.ModelSerializer):
     user_id = serializers.PrimaryKeyRelatedField(
-        queryset=CustomUser.objects.all(), source='user', write_only=True
+        queryset=get_user_model().objects.all(), source='user', write_only=True
     )
     search_criteria = serializers.JSONField(required=False)
 
@@ -33,7 +35,7 @@ class SavedSearchSerializer(serializers.ModelSerializer):
 # TODO maybe this be useless too
 class UploadedFileSerializer(serializers.ModelSerializer):
     uploaded_by_id = serializers.PrimaryKeyRelatedField(
-        queryset=CustomUser.objects.all(), source='uploaded_by', write_only=True
+        queryset=get_user_model().objects.all(), source='uploaded_by', write_only=True
     )
 
     class Meta:

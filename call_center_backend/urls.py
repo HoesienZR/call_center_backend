@@ -21,7 +21,14 @@ from django.conf.urls.static import static
 from drf_spectacular.views import SpectacularAPIView, SpectacularRedocView, SpectacularSwaggerView
 urlpatterns = [
     path("admin/", admin.site.urls),
-    path("api/", include("call_center.urls")),
+    path("api/", include("calls.urls")),
+    path("api/", include("contacts.urls")),
+    path("api/", include("projects.urls")),
+    path("api/", include("files.urls")),
+    path("api/", include("reports.urls")),
+    path("api/", include("ticket.urls")),
+    path("api/", include("users.urls")),
+
     path('silk/', include('silk.urls', namespace='silk')),
     path('api/schema/', SpectacularAPIView.as_view(), name='schema'),
     # Optional UI:

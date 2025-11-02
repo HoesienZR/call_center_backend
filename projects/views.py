@@ -7,13 +7,16 @@ from django.db import transaction
 from django.db.models import Prefetch
 from django.http import HttpResponse
 from rest_framework import viewsets, status
+from rest_framework.decorators import action
 from rest_framework.exceptions import PermissionDenied
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 
+from core.permissions import IsProjectAdminOrCaller
 from core.permissions import IsReadOnlyOrProjectAdmin, IsProjectAdmin
 from files.models import Question, UploadedFile
-from .serializers import *
+from .models import Project, ProjectCaller
+from .serializers import ProjectSerializer
 
 logger = logging.getLogger(__name__)
 

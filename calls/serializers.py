@@ -1,12 +1,16 @@
-from rest_framework import serializers
+from django.contrib.auth import get_user_model
 from persiantools.jdatetime import JalaliDate
-from files.serializers import QuestionSerializer, AnswerChoiceSerializer
-from .models import *
+from rest_framework import serializers
+
 from contacts.models import Contact
-from contacts.serializers import ContactSerializer
+from files.models import Question, AnswerChoice
+from files.serializers import QuestionSerializer, AnswerChoiceSerializer
+from projects.models import Project
 from users.serializers import CustomUserSerializer
-from projects.serializers import ProjectSerializer
-from users.models import CustomUser
+from .models import CallAnswer, Call, CallEditHistory
+
+User = get_user_model()
+
 
 class CallAnswerSummarySerializer(serializers.ModelSerializer):
     question = QuestionSerializer(read_only=True)
@@ -46,24 +50,28 @@ class CallAnswerSerializer(serializers.ModelSerializer):
 
 
 class CallSerializer(serializers.ModelSerializer):
-
     # todo this need to get damn optimised as ssoooooon as possible
     answers = CallAnswerSerializer(many=True, required=False)
-    contact = ContactSerializer(read_only=True)
+    contact = serializers.SerializerMethodField()
+
+    def get_contact(self, obj):
+        from contacts.serializers import ContactSerializer
+        return ContactSerializer(obj.contact).data
+
     contact_id = serializers.PrimaryKeyRelatedField(
         queryset=Contact.objects.all(), source='contact', write_only=True
     )
     caller = CustomUserSerializer(read_only=True)
     caller_id = serializers.PrimaryKeyRelatedField(
-        queryset=CustomUser.objects.all(), source='caller', write_only=True
+        queryset=User.objects.all(), source='caller', write_only=True
     )
-    project = ProjectSerializer(read_only=True)
+    project = serializers.PrimaryKeyRelatedField(read_only=True)
     project_id = serializers.PrimaryKeyRelatedField(
         queryset=Project.objects.all(), source='project', write_only=True
     )
     edited_by = CustomUserSerializer(read_only=True)
     edited_by_id = serializers.PrimaryKeyRelatedField(
-        queryset=CustomUser.objects.all(), source='edited_by', write_only=True, allow_null=True, required=False
+        queryset=User.objects.all(), source='edited_by', write_only=True, allow_null=True, required=False
     )
     persian_call_date = serializers.SerializerMethodField()
     original_data = serializers.JSONField(required=False)
@@ -80,6 +88,10 @@ class CallSerializer(serializers.ModelSerializer):
             'persian_call_date'
         )
         read_only_fields = ('call_date', 'created_at', 'edited_at')
+
+    def get_project(self, obj):
+        from projects.serializers import ProjectSerializer
+        return ProjectSerializer(obj.project).data
 
     def get_persian_call_date(self, obj):
         return str(JalaliDate(obj.call_date.date()))
@@ -104,12 +116,14 @@ class CallSerializer(serializers.ModelSerializer):
                 raise serializers.ValidationError(f"Invalid questions: {list(invalid_questions)}")
         return data
 
-#TODO maybe this is useless
+
+# TODO maybe this is useless
 # 6. سایر سریالایزرها با ارجاعات اصلاح شده
 class CallEditHistorySerializer(serializers.ModelSerializer):
     edited_by_id = serializers.PrimaryKeyRelatedField(
-        queryset=CustomUser.objects.all(), source='edited_by', write_only=True
+        queryset=User.objects.all(), source='edited_by', write_only=True
     )
+
     class Meta:
         model = CallEditHistory
         fields = '__all__'
