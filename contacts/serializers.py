@@ -225,3 +225,20 @@ class ContactSerializer(serializers.ModelSerializer):
 
         return super().update(instance, validated_data)
 
+class ContactStatsSerializer(serializers.ModelSerializer):
+    project_name = serializers.CharField(source='project.name', read_only=True)
+    projectId = serializers.IntegerField(source='project.id', read_only=True)
+
+    class Meta:
+        model = Contact
+        fields = ("id",
+            "full_name",
+            "phone",
+            "project_id",
+            "project_name",
+            "total_calls",
+            "answered_calls",
+            "not_answered_calls",
+            "interested_calls",
+            "not_interested_calls",
+            "no_time_calls",)
