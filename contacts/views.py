@@ -4,7 +4,8 @@ from random import random
 
 import pandas as pd
 from django.db import transaction
-from django.db.models import Q
+from django.db.models import Q, Count
+from drf_spectacular.utils import extend_schema
 from rest_framework import status
 from rest_framework.decorators import action
 from rest_framework.permissions import IsAdminUser
@@ -25,9 +26,16 @@ from .models import (
 from .permission import IsProjectAdminOrCaller
 from .serializers import (
     ContactSerializer,
+    ContactStatsSerializer,
     CallSerializer
 )
-
+from .schema import (filter_contact_by_status_and_project_schema,
+                     release_contact_schema,
+                     get_contact_stats_schema,
+                     get_statistics_schema,
+                     filter_contact_by_project_schema,
+                     filter_contact_by_status_schema,
+                     request_new_contact_schema)
 # تنظیم logger
 logger = logging.getLogger(__name__)
 
@@ -37,7 +45,7 @@ User = settings.AUTH_USER_MODEL
 
 
 class ContactViewSet(viewsets.ModelViewSet):
-    queryset = Contact.objects.all().select_related("project","assigned_caller")
+    queryset = Contact.objects.select_related("project","assigned_caller").prefetch_related('calls')
     serializer_class = ContactSerializer
     permission_classes = [IsAuthenticated, IsProjectAdminOrCaller | IsAdminUser]
 
@@ -51,13 +59,26 @@ class ContactViewSet(viewsets.ModelViewSet):
 
     def get_queryset(self):
         user = self.request.user
+        base_qs = Contact.objects.select_related("project", "assigned_caller").prefetch_related("calls")
         if user.is_superuser:
-            return self.queryset
-        user_projects = Project.objects.filter(member=user)
-        if ProjectMembership.objects.filter(project__in=user_projects,user=user,role='admin').exists():
-            return self.queryset.filter(project__in=user_projects)
-        return self.queryset.filter(assigned_caller=user)
+            qs = base_qs
+        else:
+            user_projects = Project.objects.filter(member=user)
+            if ProjectMembership.objects.filter(project__in=user_projects, user=user, role='admin').exists():
+                qs = base_qs.filter(project__in=user_projects)
+            else:
+                qs = base_qs.filter(assigned_caller=user)
 
+        qs = qs.annotate(
+            total_calls=Count('calls', distinct=True),
+            answered_calls=Count('calls', filter=Q(calls__status='answered'), distinct=True),
+            not_answered_calls=Count('calls', filter=Q(calls__status='no_answer'), distinct=True),
+            interested_calls=Count('calls', filter=Q(calls__call_result='interested'), distinct=True),
+            not_interested_calls=Count('calls', filter=Q(calls__call_result='not_interested'), distinct=True),
+            no_time_calls=Count('calls', filter=Q(calls__call_result='no_time'), distinct=True),
+        )
+
+        return qs
 
     def perform_create(self, serializer):
         """
@@ -77,6 +98,7 @@ class ContactViewSet(viewsets.ModelViewSet):
 
         serializer.save(created_by=user)
 
+    @extend_schema(**filter_contact_by_status_and_project_schema)
     @action(detail=False, methods=['get'],url_path="filter_contact_by_status_and_project")
     def filter_contact_by_status_and_project(self, request,):
 
@@ -87,7 +109,7 @@ class ContactViewSet(viewsets.ModelViewSet):
         contacts_filtered_by_project_and_status = self._filter_contacts(project_id=project_id,contact_status=contact_status)
         serializer = self.get_serializer(contacts_filtered_by_project_and_status, many=True)
         return Response(serializer.data,status=status.HTTP_200_OK)
-
+    @extend_schema(**filter_contact_by_status_schema)
     @action(detail=False, methods=['get'],url_path="filter_contact_by_status")
     def filter_contact_by_status(self, request,):
         contact_status = self.request.GET.get('status')
@@ -96,7 +118,7 @@ class ContactViewSet(viewsets.ModelViewSet):
         contact_filter_by_status =  self._filter_contacts(contact_status=contact_status)
         serializer = self.get_serializer(contact_filter_by_status, many=True)
         return Response(serializer.data,status=status.HTTP_200_OK)
-
+    @extend_schema(**filter_contact_by_project_schema)
     @action(detail=False, methods=['get'],url_path="filter_contact_by_project")
     def filter_contact_by_project(self, request, ):
         user = self.request.user
@@ -148,7 +170,7 @@ class ContactViewSet(viewsets.ModelViewSet):
 
         except Project.DoesNotExist:
             return Response({"detail": "پروژه یافت نشد."},status=status.HTTP_404_NOT_FOUND )
-
+    @extend_schema(**release_contact_schema)
     @action(detail=True, methods=['post'], url_path='release')
     def release_contact(self, request,):
         """
@@ -200,54 +222,14 @@ class ContactViewSet(viewsets.ModelViewSet):
             'not_interested': 'not_interested',
             'wrong_number': 'not_interested',
         }
-
-
-
-
-
-    @action(detail=False, methods=['get'], url_path='statistics')
-    def get_statistics(self, request):
-        """
-        آمارهای کلی مخاطبین
-        """
-        project_id = request.query_params.get('project_id')
-        user = request.user
-
-        if project_id:
-            try:
-                project = Project.objects.get(id=project_id)
-                # بررسی دسترسی
-                if not (user.is_superuser or ProjectMembership.objects.filter(
-                        project=project, user=user
-                ).exists()):
-                    return Response(
-                        {"detail": "شما به این پروژه دسترسی ندارید."},
-                        status=status.HTTP_403_FORBIDDEN
-                    )
-
-                base_queryset = Contact.objects.filter(project=project)
-            except Project.DoesNotExist:
-                return Response(
-                    {"detail": "پروژه یافت نشد."},
-                    status=status.HTTP_404_NOT_FOUND
-                )
-        else:
-            # آمار کلی برای کاربر
-            base_queryset = self.get_queryset()
-
-        statistics = {
-            'total_contacts': base_queryset.count(),
-            'pending_contacts': base_queryset.filter(call_status='pending').count(),
-            'contacted': base_queryset.filter(call_status='contacted').count(),
-            'follow_up': base_queryset.filter(call_status='follow_up').count(),
-            'not_interested': base_queryset.filter(call_status='not_interested').count(),
-            'assigned_to_me': base_queryset.filter(assigned_caller=user).count() if not user.is_superuser else None,
-            'unassigned': base_queryset.filter(assigned_caller__isnull=True).count(),
-        }
-
-        return Response(statistics)
-
-
+    @get_contact_stats_schema
+    @action(detail=True,methods=['get'],url_path='stats')
+    def get_contact_stats(self,request,pk=None):
+        contact  = self.get_object()
+        serializer = ContactStatsSerializer(contact,context={'request':request})
+        if serializer.is_valid:
+            return Response(serializer.data , status=status.HTTP_200_OK)
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
     def _filter_contacts(self, project_id=None, contact_status=None):
         qs = self.get_queryset()
         if project_id:
