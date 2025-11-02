@@ -55,24 +55,6 @@ class Contact(models.Model):
         return f"{self.full_name} - {self.phone}"
 
 
-    def get_call_statistics(self):
-        try:
-            stats = self.call_statistics.get(project=self.project)
-            return {
-                "total_calls": stats.total_calls,
-                "successful_calls": stats.successful_calls,
-                "response_rate": float(stats.response_rate),
-                "last_call_date": stats.last_call_date,
-                "last_call_result": stats.last_call_result
-            }
-        except CallStatistics.DoesNotExist:
-            return {
-                "total_calls": 0,
-                "successful_calls": 0,
-                "response_rate": 0.0,
-                "last_call_date": None,
-                "last_call_result": None
-            }
 
     def get_last_call(self):
         last_call = self.calls.order_by("-call_date").first()
