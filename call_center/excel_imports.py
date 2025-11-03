@@ -4,7 +4,7 @@ import uuid
 from django.contrib.auth import get_user_model
 from .models import Contact, Project, ProjectCaller
 from .utils import is_caller_user, clean_string_field
-
+from datetime import datetime
 User = get_user_model()
 
 def import_callers_from_excel(file_obj):
@@ -44,6 +44,13 @@ def import_callers_from_excel(file_obj):
 
 
 def import_contacts_from_excel(file_obj, project: Project):
+    gender_map = {
+        "مرد": "male",
+        "زن": "female",
+        "ترجیح میدهم که نگویم": "none",
+        "": "none",
+        None: "none"
+    }
     """
     اکسل مخاطبین را پردازش و مخاطبین پروژه ایجاد می‌کند.
     فرمت: full_name, phone, assigned_caller_username (اختیاری)
@@ -59,11 +66,20 @@ def import_contacts_from_excel(file_obj, project: Project):
     for col in required_columns:
         if col not in df.columns:
             raise ValueError(f"ستون '{col}' در فایل موجود نیست.")
-    #TODO what is exatcly unknown is for phone ?  a user with random ? number ?
     for index, row in df.iterrows():
         full_name = clean_string_field(row.get("full_name", "نامشخص"))
-        phone = str(clean_string_field(row.get("contact_phone", f"unknown_{uuid.uuid4().hex[:8]}")))
+        raw_phone = clean_string_field(row.get("contact_phone", "")).strip()
         assigned_caller_phone = clean_string_field(row.get("assigned_caller_phone", ""))
+        custom_fields = clean_string_field(row.get('custom_fields',""))
+        gender_raw = clean_string_field(row.get('gender',"")).strip()
+        gender = gender_map.get(gender_raw)
+        birth_date_str  = clean_string_field(row.get('birth_date',""))
+        address = clean_string_field(row.get('address',''))
+        if not raw_phone:
+            # skip contact with no phone number
+            continue
+        phone = raw_phone
+
 
         # اگر شماره مخاطب بدون صفر بود , صفر اضافه کن
         if phone.isdigit() and not phone.startswith("0") and len(phone) in (9, 10):
@@ -71,18 +87,19 @@ def import_contacts_from_excel(file_obj, project: Project):
 
         assigned_caller = None
         is_special = False
+        birth_date = None
+        if birth_date_str :
+            try :
+                birth_date = pd.to_datetime(birth_date_str).date()
+            except Exception :
+                birth_date = None
 
 
 
-
-        # تلاش برای یافتن تماس‌گیرنده از طریق شماره تلفن
-        # اگر شماره تماس‌گیرنده داده شده و بدون صفر بود , صفر اضافه کن
         if assigned_caller_phone and not assigned_caller_phone.startswith("0"):
             assigned_caller_phone = "0" + assigned_caller_phone
             try:
                 caller = User.objects.get(phone_number=assigned_caller_phone)
-
-                # اگر نقش تماس‌گیرنده یا ادمین دارد → به عنوان تماس‌گیرنده ست شود
                 if is_caller_user(caller, project):
                     assigned_caller = caller
                     is_special = True
@@ -90,13 +107,16 @@ def import_contacts_from_excel(file_obj, project: Project):
                 assigned_caller = None
                 is_special = False
 
-        # ساخت مخاطب
         contact = Contact.objects.create(
             project=project,
             full_name=full_name,
             phone=phone,
             assigned_caller=assigned_caller,
-            is_special=is_special
+            is_special=is_special,
+            custom_fields=custom_fields,
+            address = address,
+            gender = gender,
+            birth_date = birth_date,
         )
 
         created_contacts.append(contact.phone)
