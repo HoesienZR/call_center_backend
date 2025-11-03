@@ -18,21 +18,19 @@ from core.utils import (
     validate_phone_number, normalize_phone_number,
 )
 AUTH_USER_MODEL = settings.AUTH_USER_MODEL
+from projects.models import ProjectMembership
+from .models import Project, Contact
 
-from .models import (
-    Project, Contact, ProjectMembership
-)
+from .permission import IsProjectCaller,IsProjectAdmin,ReleaseContactPermission
 
-from .permission import IsProjectAdminOrCaller
 from .serializers import (
     ContactSerializer,
     ContactStatsSerializer,
-    CallSerializer
+    #CallSerializer
 )
 from .schema import (filter_contact_by_status_and_project_schema,
                      release_contact_schema,
                      get_contact_stats_schema,
-                     get_statistics_schema,
                      filter_contact_by_project_schema,
                      filter_contact_by_status_schema,
                      request_new_contact_schema)
@@ -47,7 +45,7 @@ User = settings.AUTH_USER_MODEL
 class ContactViewSet(viewsets.ModelViewSet):
     queryset = Contact.objects.select_related("project","assigned_caller").prefetch_related('calls')
     serializer_class = ContactSerializer
-    permission_classes = [IsAuthenticated, IsProjectAdminOrCaller | IsAdminUser]
+    permission_classes = [IsAuthenticated, IsProjectAdmin | IsAdminUser| IsProjectCaller]
 
 
     def get_serializer_context(self):
@@ -99,7 +97,7 @@ class ContactViewSet(viewsets.ModelViewSet):
         serializer.save(created_by=user)
 
     @extend_schema(**filter_contact_by_status_and_project_schema)
-    @action(detail=False, methods=['get'],url_path="filter_contact_by_status_and_project")
+    @action(detail=False, methods=['get'],url_path="filter_contact_by_status_and_project",permission_classes = [])
     def filter_contact_by_status_and_project(self, request,):
 
         contact_status = self.request.GET.get('status')
@@ -139,14 +137,8 @@ class ContactViewSet(viewsets.ModelViewSet):
         try:
             project = Project.objects.get(id=project_id)
 
-            # بررسی عضویت کاربر در پروژه
-            if not ProjectMembership.objects.filter(
-                    project=project, user=request.user
-            ).exists():
-                return Response(
-                    {"detail": "شما عضو این پروژه نیستید."},
-                    status=status.HTTP_403_FORBIDDEN
-                )
+            if not ProjectMembership.objects.filter(project=project, user=request.use).exists():
+                return Response({"detail": "شما عضو این پروژه نیستید."},status=status.HTTP_403_FORBIDDEN)
 
             available_contact = Contact.objects.filter(
                 project=project,
@@ -170,8 +162,10 @@ class ContactViewSet(viewsets.ModelViewSet):
 
         except Project.DoesNotExist:
             return Response({"detail": "پروژه یافت نشد."},status=status.HTTP_404_NOT_FOUND )
+
+
     @extend_schema(**release_contact_schema)
-    @action(detail=True, methods=['post'], url_path='release')
+    @action(detail=True, methods=['post'], url_path='release',permission_classes = [ReleaseContactPermission])
     def release_contact(self, request,):
         """
         آزاد کردن مخاطب توسط تماس‌گیرنده یا ادمین
