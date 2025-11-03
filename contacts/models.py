@@ -54,7 +54,7 @@ class Contact(models.Model):
         verbose_name = "مخاطب"
         verbose_name_plural = "مخاطبین"
         unique_together = ["project", "phone"]
-        ordering = ["full_name"]
+        ordering = ["-created_at"]
 
     def __str__(self):
         return f"{self.full_name} - {self.phone}"
