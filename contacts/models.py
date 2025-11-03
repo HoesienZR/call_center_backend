@@ -46,6 +46,11 @@ class Contact(models.Model):
     gender = models.CharField(max_length=20, choices=GENDER_CHOICES, default="none")
 
     class Meta:
+        indexes = [
+            models.Index(fields = [ 'project','assigned_caller', 'call_status', 'is_active']),
+            models.Index(fields = ['gender']),
+
+        ]
         verbose_name = "مخاطب"
         verbose_name_plural = "مخاطبین"
         unique_together = ["project", "phone"]
