@@ -2,10 +2,9 @@ from datetime import datetime
 
 from django.shortcuts import get_object_or_404
 from rest_framework import viewsets, status
+from rest_framework.decorators import action
 from rest_framework.permissions import IsAuthenticated, IsAdminUser
 
-from contacts.models import Contact
-from projects.models import Project
 from .serializers import *
 
 

@@ -3,33 +3,33 @@ import random
 from random import random
 
 import pandas as pd
+from django.contrib.auth import get_user_model
 from django.db import transaction
 from rest_framework import status
+from rest_framework import viewsets
 from rest_framework.decorators import action
 from rest_framework.permissions import IsAdminUser
-from rest_framework.response import Response
-from rest_framework import viewsets
 from rest_framework.permissions import IsAuthenticated
+from rest_framework.response import Response
 
 from core.utils import (
     validate_phone_number, normalize_phone_number, clean_string_field
 )
-from .models import CustomUser as User
-from .models import (
-    Project, Contact, UploadedFile, ProjectMembership
-)
-from .permission import IsProjectAdminOrCaller
+from files.models import UploadedFile
+from projects.models import Project, ProjectMembership
+from .models import Contact
+from core.permissions import IsProjectAdminOrCaller
 from .serializers import (
     ContactSerializer,
-    CallSerializer
 )
+from calls.serializers import CallSerializer
 
-# تنظیم logger
+User = get_user_model()
+
 logger = logging.getLogger(__name__)
 
 
 # Create your views here.
-User = settings.AUTH_USER_MODEL
 
 
 class ContactViewSet(viewsets.ModelViewSet):

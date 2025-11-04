@@ -92,7 +92,6 @@ INSTALLED_APPS = [
     "silk",
     'import_export',
     'drf_spectacular',
-    'call_center',
     'projects',
     'users',
     'ticket',
