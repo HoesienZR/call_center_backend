@@ -1,7 +1,7 @@
 import re
 
-def normalize_phone_number(phone):
 
+def normalize_phone_number(phone):
     if not phone:
         return phone
 
@@ -42,3 +42,12 @@ def validate_phone_number(phone):
             return True, phone
 
     return False, "فرمت شماره تلفن نامعتبر است"
+
+
+def clean_string_field(value):
+    """
+    تمیز کردن فیلدهای متنی
+    """
+    if value is None or str(value).strip().lower() in ['nan', 'none', '']:
+        return None
+    return str(value).strip()
