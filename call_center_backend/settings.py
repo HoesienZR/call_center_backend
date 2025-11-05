@@ -98,6 +98,7 @@ INSTALLED_APPS = [
     "calls",
     "contacts",
     "files",
+    'reports'
 ]
 USE_TZ = True
 

@@ -1,6 +1,6 @@
 import logging
 from datetime import datetime
-
+from rest_framework.views import APIView
 from django.shortcuts import get_object_or_404
 from drf_excel.mixins import XLSXFileMixin
 from drf_excel.renderers import XLSXRenderer
@@ -8,11 +8,13 @@ from rest_framework import status, viewsets
 from rest_framework.permissions import IsAdminUser, IsAuthenticated
 from rest_framework.response import Response
 from core.permissions import IsProjectAdmin
+from rest_framework.permissions import IsAuthenticated, IsAdminUser
 from calls.models import Call
 from core.pagination import LargePageSizePagination
-from .models import (
-    Project
-)
+from projects.models import Project
+from .models import CallStatistics, ExportReport, CachedStatistics
+from rest_framework.decorators import action
+
 from .serializers import CallStatisticsSerializer, CachedStatisticsSerializer, CallExcelSerializer, \
     ExportReportSerializer
 
@@ -62,7 +64,7 @@ class ContactImportView(APIView):
     """
     ایمپورت مخاطبین از فایل اکسل برای یک پروژه خاص
     """
-    permission_classes = [permissions.IsAuthenticated, permissions.IsAdminUser]
+    permission_classes = [IsAuthenticated, IsAdminUser]
 
     def post(self, request, project_id):
         """

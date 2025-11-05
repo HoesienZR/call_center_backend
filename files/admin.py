@@ -18,4 +18,3 @@ class QuestionAdmin(admin.ModelAdmin):
 
 admin.site.register(SavedSearch)
 admin.site.register(UploadedFile)
-admin.site.register(ExportReport)

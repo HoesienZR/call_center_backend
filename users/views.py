@@ -2,15 +2,18 @@ from rest_framework import status
 from rest_framework.decorators import action
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
+from rest_framework.viewsets import ReadOnlyModelViewSet
 import logging
 from projects.models import ProjectMembership
-from .models import *
+from django.contrib.auth import get_user_model
 from .serializers import CustomUserSerializer
+
+User = get_user_model()
 
 logger = logging.getLogger(__name__)
 
-class UserViewSet(viewsets.ReadOnlyModelViewSet):
-    queryset = CustomUser.objects.all()
+class UserViewSet(ReadOnlyModelViewSet):
+    queryset = User.objects.all()
     serializer_class = CustomUserSerializer
     permission_classes = [IsAuthenticated]
 
