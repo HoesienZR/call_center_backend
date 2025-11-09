@@ -200,7 +200,7 @@ class Contact(models.Model):
     full_name = models.CharField(max_length=100, verbose_name="نام کامل")
     phone = models.CharField(max_length=20, verbose_name="شماره تماس")
     email = models.EmailField(blank=True, verbose_name="ایمیل")
-    address = models.TextField(blank=True, verbose_name="آدرس")
+    address = models.TextField(blank=True, verbose_name="آدرس",null=True)
     assigned_caller = models.ForeignKey(
         settings.AUTH_USER_MODEL,
         on_delete=models.SET_NULL,
