@@ -52,11 +52,11 @@ def normalize_phone_number(phone):
     return phone
 
 def generate_username(phone):
-    random_letters = random.choice((string.punctuation))+phone
-
+    phone = str(phone)
+    username = random.choice(["@",".","+","-","_"])+phone
     for _ in range(4):
-        random_letters += random.choice(string.ascii_letters)
-    return random_letters
+        username += random.choice(string.ascii_letters)
+    return username
 
 
 def generate_secure_password(length=12):
