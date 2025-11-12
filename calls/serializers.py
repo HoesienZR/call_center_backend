@@ -1,13 +1,19 @@
-from django.contrib.auth import get_user_model
-from persiantools.jdatetime import JalaliDate
-from rest_framework import serializers
+from calls.calls_import import (
+    get_user_model,
+    JalaliDate,
+    serializers,
+    Contact,
+    Question,
+    AnswerChoice,
+    QuestionSerializer,
+    AnswerChoiceSerializer,
+    Project,
+    CustomUserSerializer,
+)
 
-from contacts.models import Contact
-from files.models import Question, AnswerChoice
-from files.serializers import QuestionSerializer, AnswerChoiceSerializer
-from projects.models import Project
-from users.serializers import CustomUserSerializer
+
 from .models import CallAnswer, Call, CallEditHistory
+
 
 User = get_user_model()
 

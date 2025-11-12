@@ -1,9 +1,7 @@
-from rest_framework import serializers
-from calls.models import Call
 from django.contrib.auth import get_user_model
-from persiantools.jdatetime import JalaliDate
-from .models import *
+from rest_framework import serializers
 
+from .models import Question, AnswerChoice, UploadedFile, SavedSearch
 
 
 class AnswerChoiceSerializer(serializers.ModelSerializer):

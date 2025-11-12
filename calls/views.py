@@ -5,9 +5,8 @@ from rest_framework import viewsets, status
 from rest_framework.decorators import action
 from rest_framework.permissions import IsAuthenticated, IsAdminUser
 
-from .serializers import *
-
-
+from .serializers import CallSerializer, CallEditHistorySerializer, CallAnswerSerializer
+from .models import CallAnswer, Call, CallEditHistory
 class CallViewSet(viewsets.ModelViewSet):
     queryset = Call.objects.all()
     serializer_class = CallSerializer

@@ -1,6 +1,6 @@
 from django.contrib import admin
 
-from .models import *
+from .models import Call, CallAnswer,CallEditHistory
 
 
 # Register your models here.
@@ -13,9 +13,7 @@ class CallAnswerAdmin(admin.ModelAdmin):
 
 @admin.register(Call)
 class CallAdmin(admin.ModelAdmin):
-    """
-    تنظیمات پنل ادمین برای مدل تماس.
-    """
+
     list_display = ('contact', 'caller', 'project', 'call_date', 'call_result', 'status', 'duration', 'created_at')
     list_filter = ('project', 'call_result', 'status', 'call_date')
     search_fields = ('contact__full_name', 'caller__username', 'notes')
