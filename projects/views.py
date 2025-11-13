@@ -23,13 +23,29 @@ from .serializers import *
 from rest_framework.decorators import action, api_view
 from rest_framework import generics,mixins
 from .utils import clean_string_field, import_caller_from_excel, check_if_user_exist, check_if_project_membership_exist,toggle_user_project_membership_role
-
+from .schema import (
+    project_list_schema,
+    project_create_schema,
+    check_user_role_schema,
+    caller_performance_schema,
+    project_membership_list_schema,
+    caller_import_schema,
+    toggle_user_role_schema,
+)
 logger = logging.getLogger(__name__)
 
 class ProjectViewSet(viewsets.ModelViewSet):
     queryset = Project.objects.all()
     serializer_class = ProjectSerializer
     permission_classes = [IsAuthenticated, IsReadOnlyOrProjectAdmin]
+
+    @project_list_schema
+    def list(self, request, *args, **kwargs):
+        return super().list(request, *args, **kwargs)
+
+    @project_create_schema
+    def create(self, request, *args, **kwargs):
+        return super().create(request, *args, **kwargs)
 
     def get_queryset(self):
         user = self.request.user
@@ -59,6 +75,8 @@ class ProjectViewSet(viewsets.ModelViewSet):
         with transaction.atomic():
             project = serializer.save(created_by=user)
             ProjectMembership.objects.create(project=project, user=user, role='admin')
+
+    @check_user_role_schema
     @action(detail=False, methods=['get'], url_path='check-user-role',
             permission_classes=[IsAuthenticated,])
     def check_user_role(self, request):
@@ -89,6 +107,8 @@ class ProjectViewSet(viewsets.ModelViewSet):
         if serializer.is_valid():
             return Response(serializer.data, status=status.HTTP_200_OK)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+    @caller_performance_schema
     @action(detail=True, methods=["get"], permission_classes=[IsAuthenticated, IsProjectAdmin])
     def caller_performance(self, request, pk=None):
         project = self.get_object()
@@ -99,6 +119,10 @@ class ProjectMembershipApiListView(mixins.ListModelMixin,generics.GenericAPIView
 
     queryset =ProjectMembership.objects.select_related("project","user")
     serializer_class = ProjectMembershipSerializer
+
+    @project_membership_list_schema
+    def get(self, request, *args, **kwargs):
+        return self.list(request, *args, **kwargs)
 
     def get_queryset(self):
         project_id = self.request.query_params.get['project_id']
@@ -112,6 +136,7 @@ class CallerImportView(APIView):
     """
     permission_classes = [IsAuthenticated, IsAdminUser]
 
+    @caller_import_schema
     def post(self, request, project_id):
         """
         آپلود فایل اکسل و افزودن مخاطبین جدید.
@@ -144,6 +169,7 @@ class CallerImportView(APIView):
                 {"error": f": error at progress of  {str(e)}"},
                 status=status.HTTP_400_BAD_REQUEST
             )
+@toggle_user_role_schema
 @api_view(["GET",])
 def toggle_user_role(request):
     try :
