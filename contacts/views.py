@@ -7,16 +7,20 @@ from django.db import transaction
 from django.db.models import Q, Count
 from drf_spectacular.utils import extend_schema
 from rest_framework import status
-from rest_framework.decorators import action
+from rest_framework.decorators import action, api_view, permission_classes
+from rest_framework.generics import get_object_or_404
 from rest_framework.permissions import IsAdminUser
 from rest_framework.response import Response
 from rest_framework import viewsets
 from rest_framework.permissions import IsAuthenticated
+from rest_framework.views import APIView
 
 from call_center_backend import settings
 from core.utils import (
     validate_phone_number, normalize_phone_number,
 )
+from .utils import check_if_available_contact, assign_available_contact
+
 AUTH_USER_MODEL = settings.AUTH_USER_MODEL
 from projects.models import ProjectMembership
 from .models import Project, Contact
@@ -187,7 +191,6 @@ class ContactViewSet(viewsets.ModelViewSet):
                 status=status.HTTP_403_FORBIDDEN
             )
 
-    #TODO so sumbit call must go on call viewset we just implementd creat call function here
     @action(detail=True, methods=["post"], url_path="submit-call")
     def submit_call(self, request, pk=None):
         """
@@ -231,3 +234,27 @@ class ContactViewSet(viewsets.ModelViewSet):
         if status:
             qs = qs.filter(call_status=status)
         return qs
+@request_new_contact_schema
+class RequestNewContactView(APIView):
+    permission_classes = [IsAuthenticated, IsProjectCaller | IsAdminUser | IsProjectAdmin]
+
+    def post(self, request):
+        project_id = request.data.get("project_id")
+        if not project_id:
+            return Response(
+                {"detail": "Project ID is required."},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        project = get_object_or_404(Project, id=project_id)
+
+        if assign_available_contact(project, request.user):
+            return Response(
+                {"detail": "A new contact has been successfully assigned to you."},
+                status=status.HTTP_200_OK
+            )
+
+        return Response(
+            {"detail": "No available contacts to assign at the moment."},
+            status=status.HTTP_404_NOT_FOUND
+        )
