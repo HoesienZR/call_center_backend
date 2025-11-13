@@ -51,36 +51,7 @@ filter_contact_by_project_schema = extend_schema(
 )
 
 
-request_new_contact_schema = extend_schema(
-    tags=['Contacts', 'Caller'],
-    summary="Request a new contact assignment",
-    description=(
-        "Allows a caller to request a new available contact within a project. "
-        "If successful, the contact will be assigned to the current user."
-    ),
-    request=None,
-    parameters=[
-        OpenApiParameter(name='project_id', description='The project ID from which to assign a new contact', required=True, type=OpenApiTypes.INT, location=OpenApiParameter.QUERY),
-    ],
-    responses={
-        200: OpenApiResponse(description="A new contact was assigned."),
-        403: OpenApiResponse(description="User is not a member of the project."),
-        404: OpenApiResponse(description="No available contacts or project not found."),
-        400: OpenApiResponse(description="Missing project_id parameter."),
-    },
-)
 
-release_contact_schema = extend_schema(
-    tags=['Contacts', 'Caller'],
-    summary="Release an assigned contact",
-    description=(
-        "Allows a caller or admin to release a contact, making it available for reassignment."
-    ),
-    responses={
-        200: OpenApiResponse(description="Contact released successfully."),
-        403: OpenApiResponse(description="User not authorized to release this contact."),
-    },
-)
 
 
 get_contact_stats_schema = extend_schema(
@@ -91,4 +62,63 @@ get_contact_stats_schema = extend_schema(
         200: OpenApiResponse(ContactStatsSerializer, description="Detailed contact statistics."),
         400: OpenApiResponse(description="Invalid contact data."),
     }
+)
+
+request_new_contact_schema = extend_schema(
+    summary="Request a new contact for a project",
+    description=(
+        "Assigns a free contact from the selected project to the authenticated user. "
+        "The user must have caller, project admin, or admin permissions."
+    ),
+    request={
+        "application/json": {
+            "type": "object",
+            "properties": {
+                "project_id": {
+                    "type": "integer",
+                    "description": "The ID of the project for which a contact should be assigned.",
+                    "example": 42,
+                }
+            },
+            "required": ["project_id"],
+        }
+    },
+    responses={
+        200: OpenApiResponse(
+            description="Successfully assigned a new contact.",
+            examples=[
+                OpenApiExample(
+                    "Success",
+                    value={"detail": "A new contact has been successfully assigned to you."}
+                )
+            ],
+        ),
+        400: OpenApiResponse(
+            description="Project ID missing or invalid.",
+            examples=[
+                OpenApiExample(
+                    "Missing ID",
+                    value={"detail": "Project ID is required."}
+                )
+            ],
+        ),
+        404: OpenApiResponse(
+            description="No available contacts or project not found.",
+            examples=[
+                OpenApiExample(
+                    "No Contacts",
+                    value={"detail": "No available contacts to assign at the moment."}
+                )
+            ],
+        ),
+    },
+    parameters=[
+        OpenApiParameter(
+            name="Authorization",
+            location=OpenApiParameter.HEADER,
+            required=True,
+            description="Bearer access token for authentication.",
+            type=str,
+        ),
+    ],
 )
