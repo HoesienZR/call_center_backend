@@ -1,5 +1,6 @@
 from datetime import datetime
 
+from drf_spectacular.utils import extend_schema, OpenApiParameter, OpenApiExample
 from django.shortcuts import get_object_or_404
 from rest_framework import viewsets, status
 from rest_framework.decorators import action
@@ -7,11 +8,23 @@ from rest_framework.permissions import IsAuthenticated, IsAdminUser
 
 from .serializers import CallSerializer, CallEditHistorySerializer, CallAnswerSerializer
 from .models import CallAnswer, Call, CallEditHistory
+
+
+@extend_schema(
+    tags=["Calls"],
+    description="مدیریت تماس‌ها شامل مشاهده، ایجاد، ویرایش و ثبت بازخورد"
+)
 class CallViewSet(viewsets.ModelViewSet):
     queryset = Call.objects.all()
     serializer_class = CallSerializer
     permission_classes = [IsAuthenticated]
 
+    @extend_schema(
+        parameters=[
+            OpenApiParameter("project_id", str, description="فیلتر تماس‌ها بر اساس ID پروژه"),
+        ],
+        description="نمایش لیست تماس‌ها بر اساس سطح دسترسی کاربر و شناسه پروژه (در صورت وجود)."
+    )
     def get_queryset(self):
         project_id = self.request.GET.get('project_id')
         if project_id:
@@ -26,6 +39,26 @@ class CallViewSet(viewsets.ModelViewSet):
 
     def perform_create(self, serializer):
         serializer.save(caller=self.request.user)
+
+
+    @extend_schema(
+        description="ایجاد یک تماس جدید با جزئیات کامل تماس.",
+        request=CallSerializer,
+        responses={201: CallSerializer},
+        examples=[
+            OpenApiExample(
+                "نمونه درخواست تماس جدید",
+                value={
+                    "contact_id": 5,
+                    "project_id": 3,
+                    "status": "completed",
+                    "call_result": "successful",
+                    "notes": "تماس موفق انجام شد.",
+                    "duration": 120
+                }
+            )
+        ]
+    )
 
     @action(detail=False, methods=["post"], permission_classes=[IsAuthenticated])
     def submit_call(self, request):
@@ -62,6 +95,17 @@ class CallViewSet(viewsets.ModelViewSet):
 
         return Response(call_serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
+    @extend_schema(
+        description="ویرایش اطلاعات تماس با ثبت تاریخچه تغییرات.",
+        request=CallSerializer,
+        responses={200: CallSerializer},
+        examples=[
+            OpenApiExample(
+                "نمونه ویرایش تماس",
+                value={"notes": "به مشتری اطلاع داده شد.", "edit_reason": "به‌روزرسانی یادداشت‌ها"}
+            )
+        ]
+    )
     @action(detail=True, methods=["post"], permission_classes=[IsAuthenticated])
     def edit_call(self, request, pk=None):
         call = self.get_object()
@@ -94,6 +138,17 @@ class CallViewSet(viewsets.ModelViewSet):
 
         return Response(self.get_serializer(call).data)
 
+    @extend_schema(
+        description="ثبت بازخورد تماس توسط تماس‌گیرنده.",
+        request={
+            "type": "object",
+            "properties": {
+                "notes": {"type": "string", "example": "مشتری پاسخ نداد."},
+                "status": {"type": "string", "example": "failed"}
+            }
+        },
+        responses={200: CallSerializer}
+    )
     @action(detail=True, methods=["post"], permission_classes=[IsAuthenticated])
     def submit_feedback(self, request, pk=None):
         """
@@ -121,6 +176,17 @@ class CallViewSet(viewsets.ModelViewSet):
         call.save()
         return Response(self.get_serializer(call).data, status=status.HTTP_200_OK)
 
+    @extend_schema(
+        description="ثبت گزارش تفصیلی برای تماس (مناسب برای گزارش‌های کامل تماس‌ها).",
+        request={
+            "type": "object",
+            "properties": {
+                "report_data": {"type": "object", "example": {"summary": "مذاکره درباره قرارداد جدید"}},
+                "call_status": {"type": "string", "example": "completed"}
+            }
+        },
+        responses={200: CallSerializer}
+    )
     @action(detail=True, methods=["post"], permission_classes=[IsAuthenticated])
     def submit_detailed_report(self, request, pk=None):
         """

@@ -43,10 +43,8 @@ SPECTACULAR_SETTINGS = {
     'TITLE': 'MarCazTamas',
     'DESCRIPTION': 'a api for markaz tamas ',
     'VERSION': '1.0.0',
-    'SERVE_INCLUDE_SCHEMA': False,
-    'SWAGGER_UI_DIST': 'MarCazTamas',
+    'SERVE_INCLUDE_SCHEMA': True,
     'SWAGGER_UI_FAVICON_HREF': 'MarCazTamas',
-    'REDOC_DIST': 'MarCazTamas',
     # OTHER SETTINGS
 }
 CORS_ALLOW_ALL_ORIGINS = True
@@ -91,14 +89,15 @@ INSTALLED_APPS = [
     'django_celery_beat',
     "silk",
     'import_export',
-    'drf_spectacular',
     'projects',
     'users',
     'ticket',
     "calls",
     "contacts",
     "files",
-    'reports'
+    'reports',
+    "drf_spectacular",
+    "drf_spectacular_sidecar"
 ]
 USE_TZ = True
 
@@ -174,9 +173,12 @@ USE_I18N = True
 # Static files (CSS, JavaScript, Images)
 # https://docs.djangoproject.com/en/5.2/howto/static-files/
 
-STATIC_URL = 'static/'
-STATIC_ROOT = 'staticfiles/'
+STATIC_URL = '/static/'
+STATIC_ROOT = BASE_DIR / 'staticfiles/'
 
+STATICFILES_DIRS = [
+    BASE_DIR / 'static',
+]
 # Default primary key field type
 # https://docs.djangoproject.com/en/5.2/ref/settings/#default-auto-field
 
