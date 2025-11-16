@@ -40,7 +40,7 @@ DEBUG = True
 
 ALLOWED_HOSTS = ['*']
 SPECTACULAR_SETTINGS = {
-    'TITLE': 'MarCazTamas',
+    'TITLE': 'MarkazTamas',
     'DESCRIPTION': 'a api for markaz tamas ',
     'VERSION': '1.0.0',
     'SERVE_INCLUDE_SCHEMA': True,
