@@ -30,7 +30,7 @@ class CallCenterAPITestCase(TestCase):
         self.admin_user = User.objects.create_user(
             username='admin_test',
             password='admin123',
-            email='admin@test.com',
+            email='admin@tests.com',
             is_staff=True,
             is_superuser=True
         )
@@ -38,7 +38,7 @@ class CallCenterAPITestCase(TestCase):
         self.caller_user = User.objects.create_user(
             username='caller_test',
             password='caller123',
-            email='caller@test.com',
+            email='caller@tests.com',
             is_staff=False
         )
         
@@ -70,7 +70,7 @@ class CallCenterAPITestCase(TestCase):
             first_name='علی',
             last_name='احمدی',
             phone_number='09123456789',
-            email='ali@test.com',
+            email='ali@tests.com',
             call_status='pending'
         )
 
@@ -315,7 +315,7 @@ if __name__ == "__main__":
         print("\n=== اجرای تست‌های Django ===")
         import unittest
         
-        # ایجاد test suite
+        # ایجاد tests suite
         loader = unittest.TestLoader()
         suite = unittest.TestSuite()
         

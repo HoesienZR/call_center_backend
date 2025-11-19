@@ -1,11 +1,11 @@
 from django.conf import settings
 from django.db import models
+import json
 
-from calls.calls_import import (Contact, Question, AnswerChoice, Project, )
+from calls.calls_import import Contact, Question, AnswerChoice, Project
 
 
-# Create your models here.
-
+# مدل برای ثبت تماس‌ها
 class Call(models.Model):
     """مدل برای ثبت تماس‌ها"""
     CALL_RESULT_CHOICES = [
@@ -20,11 +20,14 @@ class Call(models.Model):
         ('no_answer', 'پاسخ نداد'),
         ('pending', "در انتظار")
     ]
+
+    # فیلدها
     contact = models.ForeignKey(Contact, on_delete=models.CASCADE, related_name='calls', verbose_name="مخاطب")
     caller = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='calls',
                                verbose_name="تماس‌گیرنده")
     project = models.ForeignKey(Project, on_delete=models.CASCADE, related_name='calls', verbose_name="پروژه")
-    call_date = models.DateTimeField(auto_now_add=True, verbose_name="تاریخ تماس")
+    call_date = models.DateTimeField(auto_now_add=True, verbose_name="تاریخ تماس",
+                                     db_index=True)  # ایندکس برای سرعت جستجو
     call_result = models.CharField(max_length=50, choices=CALL_RESULT_CHOICES, verbose_name="نتیجه تماس", blank=True,
                                    null=True)
     status = models.CharField(max_length=20, choices=CALL_STATUS_CHOICES, default='pending', verbose_name="وضعیت")
@@ -36,24 +39,21 @@ class Call(models.Model):
     follow_up_date = models.DateTimeField(null=True, blank=True, verbose_name="تاریخ پیگیری")
     is_editable = models.BooleanField(default=True, verbose_name="قابل ویرایش")
     edited_at = models.DateTimeField(null=True, blank=True, verbose_name="تاریخ ویرایش")
-    edited_by = models.ForeignKey(
-        settings.AUTH_USER_MODEL,
-        on_delete=models.SET_NULL,
-        null=True,
-        blank=True,
-        related_name='edited_calls',
-        verbose_name="ویرایش شده توسط"
-    )
+    edited_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True,
+                                  related_name='edited_calls', verbose_name="ویرایش شده توسط")
     edit_reason = models.TextField(blank=True, verbose_name="دلیل ویرایش")
-    original_data = models.TextField(blank=True, verbose_name="داده‌های اصلی")
+
+    # استفاده از JSONField به جای TextField برای داده‌های اصلی
+    original_data = models.JSONField(blank=True, verbose_name="داده‌های اصلی")
+
     created_at = models.DateTimeField(auto_now_add=True, verbose_name="تاریخ ایجاد")
 
+    # بهینه‌سازی متد can_edit
     def can_edit(self, user):
         if not self.is_editable:
             return False
         if user.is_superuser:
             return True
-        # بررسی اینکه آیا کاربر ادمین پروژه است یا همان تماس‌گیرنده است
         try:
             membership = ProjectMembership.objects.get(project=self.project, user=user)
             if membership.role == 'admin' or self.caller == user:
@@ -62,30 +62,7 @@ class Call(models.Model):
             return False
         return False
 
-    class Meta:
-        verbose_name = "تماس"
-        verbose_name_plural = "تماس‌ها"
-        ordering = ['-call_date']
-
-    def __str__(self):
-        return f"{self.contact.full_name} - {self.caller.get_full_name()} - {self.get_call_result_display()}"
-
-    def get_original_data(self):
-        """دریافت داده‌های اصلی به صورت dict"""
-        if self.original_data:
-            try:
-                return json.loads(self.original_data)
-            except json.JSONDecodeError:
-                return {}
-        return {}
-
-    def set_original_data(self, data_dict):
-        """تنظیم داده‌های اصلی"""
-        if data_dict:
-            self.original_data = json.dumps(data_dict, ensure_ascii=False)
-        else:
-            self.original_data = ""
-
+    # متدهای متفرقه
     def save_original_data_if_first_edit(self):
         """ذخیره داده‌های اصلی در صورت اولین ویرایش"""
         if not self.original_data:
@@ -96,20 +73,38 @@ class Call(models.Model):
                 'follow_up_required': self.follow_up_required,
                 'follow_up_date': self.follow_up_date.isoformat() if self.follow_up_date else None
             }
-            self.set_original_data(original)
+            self.original_data = original
 
     def save(self, *args, **kwargs):
+        self.save_original_data_if_first_edit()  # ذخیره داده‌های اصلی تنها در صورت اولین ویرایش
         super().save(*args, **kwargs)
-        # به‌روزرسانی آمار پس از ذخیره
         self.update_call_statistics()
 
     def update_call_statistics(self):
         """به‌روزرسانی آمار تماس‌ها"""
-        stats, created = CallStatistics.objects.get_or_create(
-            contact=self.contact,
-            project=self.project
-        )
+        stats, created = CallStatistics.objects.get_or_create(contact=self.contact, project=self.project)
         stats.update_statistics()
+
+    class Meta:
+        verbose_name = "تماس"
+        verbose_name_plural = "تماس‌ها"
+        ordering = ['-call_date']
+        indexes = [
+            models.Index(fields=['call_date']),
+            models.Index(fields=['contact']),
+            models.Index(fields=['project']),
+        ]
+
+    def __str__(self):
+        return f"{self.contact.full_name} - {self.caller.get_full_name()} - {self.get_call_result_display()}"
+
+    def get_original_data(self):
+        """دریافت داده‌های اصلی به صورت dict"""
+        return self.original_data if self.original_data else {}
+
+    def set_original_data(self, data_dict):
+        """تنظیم داده‌های اصلی"""
+        self.original_data = data_dict if data_dict else {}
 
 
 class CallEditHistory(models.Model):
@@ -117,7 +112,8 @@ class CallEditHistory(models.Model):
     call = models.ForeignKey(Call, on_delete=models.CASCADE, related_name='edit_history', verbose_name="تماس")
     edited_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='call_edits',
                                   verbose_name="ویرایش شده توسط")
-    edit_date = models.DateTimeField(auto_now_add=True, verbose_name="تاریخ ویرایش")
+    edit_date = models.DateTimeField(auto_now_add=True, verbose_name="تاریخ ویرایش",
+                                     db_index=True)  # ایندکس برای بهبود سرعت جستجو
     field_name = models.CharField(max_length=50, verbose_name="نام فیلد")
     old_value = models.TextField(blank=True, verbose_name="مقدار قبلی")
     new_value = models.TextField(blank=True, verbose_name="مقدار جدید")
@@ -127,6 +123,9 @@ class CallEditHistory(models.Model):
         verbose_name = "تاریخچه ویرایش تماس"
         verbose_name_plural = "تاریخچه ویرایش تماس‌ها"
         ordering = ['-edit_date']
+        indexes = [
+            models.Index(fields=['edit_date']),  # ایندکس برای سرعت جستجو
+        ]
 
     def __str__(self):
         return f"{self.call.id} - {self.field_name} - {self.edited_by.get_full_name()}"

@@ -24,7 +24,7 @@ function csrfSafeMethod(method) {
 }
 
 function sameOrigin(url) {
-  // test that a given url is a same-origin URL
+  // tests that a given url is a same-origin URL
   // url could be relative or scheme relative or absolute
   var host = document.location.host; // host + port
   var protocol = document.location.protocol;

@@ -1,39 +1,43 @@
 from datetime import datetime
-
 from django.shortcuts import get_object_or_404
+from django.utils import timezone
 from rest_framework import viewsets, status
 from rest_framework.decorators import action
 from rest_framework.permissions import IsAuthenticated, IsAdminUser
+from rest_framework.response import Response
 
 from .serializers import CallSerializer, CallEditHistorySerializer, CallAnswerSerializer
 from .models import CallAnswer, Call, CallEditHistory
 from .services.schema import call_schema, project_filter_schema, call_create_detail_schema, \
     call_edit_changesubmit_schema, caller_feedback_schema, detailed_report_schema
+from contacts.models import Contact
+from projects.models import Project
 
 
 @call_schema
 class CallViewSet(viewsets.ModelViewSet):
-    queryset = Call.objects.select_related('contact','caller', 'project', 'edited_by').all()
+    queryset = Call.objects.select_related('contact', 'caller', 'project', 'edited_by').all()
     serializer_class = CallSerializer
     permission_classes = [IsAuthenticated]
 
     @project_filter_schema
     def get_queryset(self):
         project_id = self.request.GET.get('project_id')
+        queryset = super().get_queryset()
+
         if project_id:
             project = get_object_or_404(Project, id=project_id)
-        queryset = super().get_queryset()
-        if self.request.user.is_staff:
-            return queryset
-        if project_id and project.created_by == self.request.user:
-            return queryset.filter(project=project)
-        # Callers can only see their own calls
+            if self.request.user.is_staff:
+                return queryset.filter(project=project)
+            if project.created_by == self.request.user:
+                return queryset.filter(project=project)
+            return queryset.filter(caller=self.request.user, project=project)
+
+        # If no project_id is provided, allow callers to see their own calls
         return queryset.filter(caller=self.request.user)
 
     def perform_create(self, serializer):
         serializer.save(caller=self.request.user)
-
-
 
     @call_create_detail_schema
     @action(detail=False, methods=["post"], permission_classes=[IsAuthenticated])
@@ -41,7 +45,7 @@ class CallViewSet(viewsets.ModelViewSet):
         """
         ایجاد یک تماس جدید با بازخورد
         """
-        contact_id = request.data.get('callecaller_id') or request.data.get('contact_id')
+        contact_id = request.data.get('caller_id') or request.data.get('contact_id')
         project_id = request.data.get('project_id')
 
         if not contact_id:
@@ -53,17 +57,19 @@ class CallViewSet(viewsets.ModelViewSet):
         except (Contact.DoesNotExist, Project.DoesNotExist):
             return Response({"error": "Contact یا Project یافت نشد"}, status=404)
 
-        serializer_data = {"contact": contact_id,
-                           "caller_id": request.user.id,
-                           "project": project_id,
-                           "status": request.data.get('status', 'completed'),
-                           "call_result": request.data.get('call_result'),
-                           "notes": request.data.get('notes', ''),
-                           "duration": request.data.get('duration', 0),
-                           "follow_up_required": request.data.get('call_result') == 'callback_requested',
-                           "follow_up_date": request.data.get('follow_up_date'),
-                           }
+        serializer_data = {
+            "contact": contact_id,
+            "caller": request.user.id,
+            "project": project_id,
+            "status": request.data.get('status', 'completed'),
+            "call_result": request.data.get('call_result'),
+            "notes": request.data.get('notes', ''),
+            "duration": request.data.get('duration', 0),
+            "follow_up_required": request.data.get('call_result') == 'callback_requested',
+            "follow_up_date": request.data.get('follow_up_date'),
+        }
         serializer_data.update({k: v for k, v in request.data.items() if k not in serializer_data})
+
         call_serializer = CallSerializer(data=serializer_data)
         if call_serializer.is_valid(raise_exception=True):
             call_serializer.save(caller_id=self.request.user.id)
@@ -75,34 +81,46 @@ class CallViewSet(viewsets.ModelViewSet):
     @action(detail=True, methods=["post"], permission_classes=[IsAuthenticated])
     def edit_call(self, request, pk=None):
         call = self.get_object()
+
         if not call.can_edit(request.user):
-            return Response({"detail": "You are not authorized to edit this call."}, status=status.HTTP_403_FORBIDDEN)
+            return Response(
+                {"detail": "You are not authorized to edit this call."},
+                status=status.HTTP_403_FORBIDDEN
+            )
 
         serializer = self.get_serializer(call, data=request.data, partial=True)
         serializer.is_valid(raise_exception=True)
 
-        # Save original data if it\"s the first edit
+        # ذخیره داده اصلی اگر اولین ویرایش است
         call.save_original_data_if_first_edit()
 
-        # Manually save changes and create CallEditHistory
-        for attr, value in serializer.validated_data.items():
-            if hasattr(call, attr) and getattr(call, attr) != value:
-                CallEditHistory.objects.create(
-                    call=call,
-                    edited_by=request.user,
-                    field_name=attr,
-                    old_value=str(getattr(call, attr)),
-                    new_value=str(value),
-                    edit_reason=request.data.get("edit_reason", "")
+        # ثبت تاریخچه ویرایش برای هر فیلد تغییر کرده
+        edit_history = []
+        for attr, new_value in serializer.validated_data.items():
+            old_value = getattr(call, attr)
+            if old_value != new_value:
+                edit_history.append(
+                    CallEditHistory(
+                        call=call,
+                        edited_by=request.user,
+                        field_name=attr,
+                        old_value=str(old_value),
+                        new_value=str(new_value),
+                        edit_reason=request.data.get("edit_reason", "")
+                    )
                 )
-                setattr(call, attr, value)
 
-        call.edited_at = datetime.now()
-        call.edited_by = request.user
-        call.edit_reason = request.data.get("edit_reason", "")
-        call.save()
+        # Bulk create for CallEditHistory
+        CallEditHistory.objects.bulk_create(edit_history)
 
-        return Response(self.get_serializer(call).data)
+        # ذخیره تغییرات با Serializer
+        serializer.save(
+            edited_by=request.user,
+            edit_reason=request.data.get("edit_reason", ""),
+            edited_at=timezone.now()
+        )
+
+        return Response(self.get_serializer(call).data, status=status.HTTP_200_OK)
 
     @caller_feedback_schema
     @action(detail=True, methods=["post"], permission_classes=[IsAuthenticated])
@@ -142,7 +160,7 @@ class CallViewSet(viewsets.ModelViewSet):
         if call.caller != request.user:
             return Response({"detail": "شما مجاز به ثبت گزارش برای این تماس نیستید."}, status=status.HTTP_403_FORBIDDEN)
 
-        report_data = request.data.get("report_data")  # انتظار یک دیکشنری یا JSON برای گزارش تفصیلی
+        report_data = request.data.get("report_data")
         call_status = request.data.get("call_status")
 
         if not report_data and not call_status:
@@ -159,7 +177,6 @@ class CallViewSet(viewsets.ModelViewSet):
 
         call.save()
         return Response(self.get_serializer(call).data, status=status.HTTP_200_OK)
-
 
 
 class CallEditHistoryViewSet(viewsets.ReadOnlyModelViewSet):
