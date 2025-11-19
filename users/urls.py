@@ -1,8 +1,8 @@
 from django.urls import path
 from rest_framework.routers import DefaultRouter
 
-import auth_views
-import views
+from . import auth_views
+from . import views
 from users.views import UserViewSet
 
 router = DefaultRouter()
@@ -14,6 +14,6 @@ urlpatterns = [
                   path("auth/profile/", auth_views.user_profile, name="profile"),
                   path("auth/register/", auth_views.register, name="register"),
                   path("auth/token/", auth_views.CustomAuthToken.as_view(), name="token"),
-                  path("request-otp/", views.request_otp, name="request-otp"),
-                  path("verify-otp/", views.verify_otp, name="verify-otp"),
+                  path("request-otp/", auth_views.request_otp, name="request-otp"),
+                  path("verify-otp/", auth_views.verify_otp, name="verify-otp"),
               ] + router.urls

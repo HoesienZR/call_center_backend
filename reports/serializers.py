@@ -1,8 +1,9 @@
 from rest_framework import serializers
-
+from django.contrib.auth import get_user_model
 from .models import CallStatistics, CachedStatistics, ExportReport
 from calls.models import Call
 
+User = get_user_model()
 
 # TODO  maybe and this also is useless
 class CallStatisticsSerializer(serializers.ModelSerializer):
@@ -13,7 +14,7 @@ class CallStatisticsSerializer(serializers.ModelSerializer):
 
 class ExportReportSerializer(serializers.ModelSerializer):
     exported_by_id = serializers.PrimaryKeyRelatedField(
-        queryset=CustomUser.objects.all(), source='exported_by', write_only=True
+        queryset=User.objects.all(), source='exported_by', write_only=True
     )
     filters = serializers.JSONField(required=False)
 
@@ -40,14 +41,6 @@ class GeneralStatisticsSerializer(serializers.Serializer):
     answered_calls = serializers.IntegerField()
     success_rate = serializers.FloatField()
     answer_rate = serializers.FloatField()
-
-
-class ProjectStatisticsSerializer(serializers.Serializer):
-    project_id = serializers.IntegerField()
-    project_name = serializers.CharField()
-    general_statistics = GeneralStatisticsSerializer()
-    caller_performance = CallerPerformanceSerializer(many=True)
-
 
 class CallerPerformanceSerializer(serializers.Serializer):
     caller_id = serializers.IntegerField()
@@ -79,6 +72,16 @@ class CallerPerformanceSerializer(serializers.Serializer):
     total_duration_formatted = serializers.CharField()
     avg_duration_formatted = serializers.CharField()
     calls_with_duration = serializers.IntegerField()
+
+
+
+class ProjectStatisticsSerializer(serializers.Serializer):
+    project_id = serializers.IntegerField()
+    project_name = serializers.CharField()
+    general_statistics = GeneralStatisticsSerializer()
+    caller_performance = CallerPerformanceSerializer(many=True)
+
+
 
 
 class CallExcelSerializer(serializers.ModelSerializer):

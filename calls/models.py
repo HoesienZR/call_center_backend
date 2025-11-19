@@ -1,9 +1,7 @@
 from django.conf import settings
 from django.db import models
 
-from contacts.models import Contact
-from files.models import Question, AnswerChoice
-from projects.models import Project
+from calls.calls_import import (Contact, Question, AnswerChoice, Project, )
 
 
 # Create your models here.

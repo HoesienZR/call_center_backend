@@ -9,10 +9,10 @@ router = DefaultRouter()
 questions_router = NestedSimpleRouter(project_router, r"projects", lookup="project")
 questions_router.register(r"questions", views.QuestionViewSet, basename="project-questions")
 
-choices_router = NestedSimpleRouter(project_router, r"questions", lookup="question")
+choices_router = NestedSimpleRouter(questions_router, r"questions", lookup="question")
 choices_router.register(r"choices", views.AnswerChoiceViewSet, basename="project-choices")
 router.register(r'saved-searches', views.SavedSearchViewSet, basename="saved-searches")
-router.register(r'upload-files', views.UploadFileViewSet, basename="upload-files")
-router.register(r'export-reports', views.ExportReportViewSet, basename="export-reports")
+router.register(r'upload-files', views.UploadedFileViewSet, basename="upload-files")
+# router.register(r'export-reports', views.ExportReportViewSet, basename="export-reports")
 
 urlpatterns = questions_router.urls + choices_router.urls + router.urls

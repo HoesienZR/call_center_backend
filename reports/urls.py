@@ -1,12 +1,11 @@
 from django.urls import path
 from rest_framework.routers import DefaultRouter
 
-import views
-
+from . import views
 router = DefaultRouter()
 
-router.register(r'call-statistics', views.CallStatisticViewSet, basename='call-statistics')
-router.register(r'cached-statistics', views.CachedStatisticViewSet, basename='cached-statistics')
+router.register(r'call-statistics', views.CallStatisticsViewSet, basename='call-statistics')
+router.register(r'cached-statistics', views.CachedStatisticsViewSet, basename='cached-statistics')
 router.register(r'excel', views.CallExcelViewSet, basename='excel')
 
 urlpatterns = [

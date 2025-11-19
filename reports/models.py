@@ -1,5 +1,7 @@
 from django.db import models
 from django.conf import settings
+from contacts.models import Contact
+from projects.models import Project
 
 # Create your models here.
 

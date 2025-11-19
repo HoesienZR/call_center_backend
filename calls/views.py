@@ -5,14 +5,19 @@ from rest_framework import viewsets, status
 from rest_framework.decorators import action
 from rest_framework.permissions import IsAuthenticated, IsAdminUser
 
-from .serializers import *
+from .serializers import CallSerializer, CallEditHistorySerializer, CallAnswerSerializer
+from .models import CallAnswer, Call, CallEditHistory
+from .services.schema import call_schema, project_filter_schema, call_create_detail_schema, \
+    call_edit_changesubmit_schema, caller_feedback_schema, detailed_report_schema
 
 
+@call_schema
 class CallViewSet(viewsets.ModelViewSet):
-    queryset = Call.objects.all()
+    queryset = Call.objects.select_related('contact','caller', 'project', 'edited_by').all()
     serializer_class = CallSerializer
     permission_classes = [IsAuthenticated]
 
+    @project_filter_schema
     def get_queryset(self):
         project_id = self.request.GET.get('project_id')
         if project_id:
@@ -28,6 +33,9 @@ class CallViewSet(viewsets.ModelViewSet):
     def perform_create(self, serializer):
         serializer.save(caller=self.request.user)
 
+
+
+    @call_create_detail_schema
     @action(detail=False, methods=["post"], permission_classes=[IsAuthenticated])
     def submit_call(self, request):
         """
@@ -63,6 +71,7 @@ class CallViewSet(viewsets.ModelViewSet):
 
         return Response(call_serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
+    @call_edit_changesubmit_schema
     @action(detail=True, methods=["post"], permission_classes=[IsAuthenticated])
     def edit_call(self, request, pk=None):
         call = self.get_object()
@@ -95,6 +104,7 @@ class CallViewSet(viewsets.ModelViewSet):
 
         return Response(self.get_serializer(call).data)
 
+    @caller_feedback_schema
     @action(detail=True, methods=["post"], permission_classes=[IsAuthenticated])
     def submit_feedback(self, request, pk=None):
         """
@@ -122,6 +132,7 @@ class CallViewSet(viewsets.ModelViewSet):
         call.save()
         return Response(self.get_serializer(call).data, status=status.HTTP_200_OK)
 
+    @detailed_report_schema
     @action(detail=True, methods=["post"], permission_classes=[IsAuthenticated])
     def submit_detailed_report(self, request, pk=None):
         """
@@ -148,6 +159,7 @@ class CallViewSet(viewsets.ModelViewSet):
 
         call.save()
         return Response(self.get_serializer(call).data, status=status.HTTP_200_OK)
+
 
 
 class CallEditHistoryViewSet(viewsets.ReadOnlyModelViewSet):
