@@ -21,9 +21,7 @@ class Contact(models.Model):
     ]
     birth_date = models.DateField(null=True, blank=True, verbose_name="تاریخ تولد")
 
-    user = models.OneToOneField(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="user_contact",
-                                verbose_name="کاربر مخاطب", blank=True, null=True)
-    project = models.ForeignKey(Project, on_delete=models.CASCADE, related_name="contacts", verbose_name="پروژه")
+    project = models.ForeignKey("Project", on_delete=models.CASCADE, related_name="contacts", verbose_name="پروژه")
     full_name = models.CharField(max_length=100, verbose_name="نام کامل")
     phone = models.CharField(max_length=20, verbose_name="شماره تماس")
     email = models.EmailField(blank=True, verbose_name="ایمیل")
@@ -48,46 +46,20 @@ class Contact(models.Model):
     gender = models.CharField(max_length=20, choices=GENDER_CHOICES, default="none")
 
     class Meta:
+        indexes = [
+            models.Index(fields = [ 'project','assigned_caller', 'call_status', 'is_active']),
+            models.Index(fields = ['gender']),
+
+        ]
         verbose_name = "مخاطب"
         verbose_name_plural = "مخاطبین"
         unique_together = ["project", "phone"]
-        ordering = ["full_name"]
+        ordering = ["-created_at"]
 
     def __str__(self):
         return f"{self.full_name} - {self.phone}"
 
-    def get_custom_fields(self):
-        if self.custom_fields:
-            try:
-                return json.loads(self.custom_fields)
-            except json.JSONDecodeError:
-                return {}
-        return {}
 
-    def set_custom_fields(self, fields_dict):
-        if fields_dict:
-            self.custom_fields = json.dumps(fields_dict, ensure_ascii=False)
-        else:
-            self.custom_fields = ""
-
-    def get_call_statistics(self):
-        try:
-            stats = self.call_statistics.get(project=self.project)
-            return {
-                "total_calls": stats.total_calls,
-                "successful_calls": stats.successful_calls,
-                "response_rate": float(stats.response_rate),
-                "last_call_date": stats.last_call_date,
-                "last_call_result": stats.last_call_result
-            }
-        except CallStatistics.DoesNotExist:
-            return {
-                "total_calls": 0,
-                "successful_calls": 0,
-                "response_rate": 0.0,
-                "last_call_date": None,
-                "last_call_result": None
-            }
 
     def get_last_call(self):
         last_call = self.calls.order_by("-call_date").first()
