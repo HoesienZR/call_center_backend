@@ -690,4 +690,3 @@ import json
 #             formatted_answers.append(f"{question_text} {selected_choice_text}  |")
 #         return "\n".join(formatted_answers) if formatted_answers else ""
 # # 2. سریالایزر برای مدیریت نقش کاربران در پروژه
-

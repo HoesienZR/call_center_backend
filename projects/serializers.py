@@ -1,4 +1,4 @@
-from persiantools.jdatetime import JalaliDate
+from django.contrib.auth import get_user_model
 from rest_framework import serializers
 
 from calls.serializers import CallAnswer, CallAnswerSummarySerializer
@@ -11,7 +11,7 @@ from .models import *
 class ProjectMembershipSerializer(serializers.ModelSerializer):
     user = CustomUserSerializer(read_only=True)
     user_id = serializers.PrimaryKeyRelatedField(
-        queryset=CustomUser.objects.all(), source='user', write_only=True
+        queryset=User.objects.all(), source='user', write_only=True
     )
     project_id = serializers.PrimaryKeyRelatedField(
         queryset=Project.objects.all(), source='project', write_only=True
@@ -27,7 +27,7 @@ class ProjectSerializer(serializers.ModelSerializer):
     call_answers_summary = AnswerChoiceSerializer(many=True, read_only=True)
     created_by = CustomUserSerializer(read_only=True)
     created_by_id = serializers.PrimaryKeyRelatedField(
-        queryset=CustomUser.objects.all(), source='created_by', write_only=True
+        queryset=User.objects.all(), source='created_by', write_only=True
     )
     project_statistics = serializers.SerializerMethodField()
     persian_updated_at = serializers.SerializerMethodField()

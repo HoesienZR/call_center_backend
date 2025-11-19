@@ -8,6 +8,7 @@ from django.db import transaction
 from django.db.models import Prefetch
 from django.http import HttpResponse
 from rest_framework import viewsets, status
+from rest_framework.decorators import action
 from rest_framework.exceptions import PermissionDenied
 from rest_framework.generics import get_object_or_404
 from rest_framework.permissions import IsAuthenticated
