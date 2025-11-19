@@ -23,7 +23,6 @@ class Project(models.Model):
     members = models.ManyToManyField(settings.AUTH_USER_MODEL, through='ProjectMembership', related_name='projects',
                                      verbose_name="اعضای پروژه")
 
-
     def get_statistics(self):
         """دریافت آمار کلی پروژه"""
         total_contacts = self.contacts.count()
@@ -87,11 +86,7 @@ class Project(models.Model):
             })
         return caller_performance
 
-
     class Meta:
-        indexes = [
-            models.Index(fields=['role']),
-        ]
         verbose_name = "پروژه"
         verbose_name_plural = "پروژه‌ها"
         ordering = ['-created_at']
@@ -101,8 +96,6 @@ class Project(models.Model):
 
     def __str__(self):
         return self.name
-
-    # ... (متدهای دیگر مدل Project بدون تغییر باقی می‌مانند)
 
 
 # 2. مدل جدید برای مدیریت سطوح دسترسی کاربران در هر پروژه
@@ -124,7 +117,10 @@ class ProjectMembership(models.Model):
     class Meta:
         verbose_name = "عضویت در پروژه"
         verbose_name_plural = "عضویت‌ها در پروژه‌ها"
-        # unique_together = ('project', 'user') # هر کاربر در هر پروژه فقط یک نقش می‌تواند داشته باشد
+        unique_together = ('project', 'user')  # هر کاربر در هر پروژه فقط یک نقش می‌تواند داشته باشد
+        indexes = [
+            models.Index(fields=['role'])  # ایندکس برای فیلد role
+        ]
         ordering = ['-assigned_at']
 
     def __str__(self):

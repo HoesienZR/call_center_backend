@@ -1,6 +1,6 @@
 from drf_spectacular.utils import extend_schema, OpenApiParameter, OpenApiExample, OpenApiResponse
-from .serializers import CallSerializer, CallEditHistorySerializer
-from .models import Call, CallEditHistory, CallAnswer
+from calls.serializers import CallSerializer, CallEditHistorySerializer
+from calls.models import Call, CallEditHistory, CallAnswer
 from contacts.models import Contact
 from projects.models import Project
 

@@ -6,6 +6,12 @@ from django.db.utils import IntegrityError
 
 User = get_user_model()
 
+import os
+os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'call_center_backend.settings')
+
+import django
+django.setup()
+
 class CallModelTest(TestCase):
     def setUp(self):
         # ایجاد کاربران و پروژه‌ها برای تست

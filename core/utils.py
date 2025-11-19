@@ -51,3 +51,10 @@ def clean_string_field(value):
     if value is None or str(value).strip().lower() in ['nan', 'none', '']:
         return None
     return str(value).strip()
+
+def generate_username(phone):
+    random_letters = random.choice((string.punctuation))+phone
+
+    for _ in range(4):
+        random_letters += random.choice(string.ascii_letters)
+    return random_letters

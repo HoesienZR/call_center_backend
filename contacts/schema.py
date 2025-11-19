@@ -122,3 +122,50 @@ request_new_contact_schema = extend_schema(
         ),
     ],
 )
+
+release_contact_schema = extend_schema(
+    tags=['Contacts', 'Release'],
+    summary="آزاد کردن مخاطب",
+    description=(
+        "این عملیات برای آزاد کردن یک مخاطب تخصیص داده شده توسط تماس‌گیرنده یا ادمین است. "
+        "مخاطب پس از آزاد شدن، به لیست عمومی مخاطبین بازمی‌گردد."
+    ),
+    parameters=[
+        OpenApiParameter(
+            name="contact_id",
+            description="شناسه مخاطب که باید آزاد شود",
+            required=True,
+            type=OpenApiTypes.INT,
+            location=OpenApiParameter.PATH,
+        ),
+    ],
+    responses={
+        200: OpenApiResponse(
+            description="مخاطب با موفقیت آزاد شد و به لیست عمومی بازگشت.",
+            examples=[
+                OpenApiExample(
+                    "Success",
+                    value={"detail": "مخاطب با موفقیت آزاد شد و به لیست عمومی بازگشت."}
+                )
+            ],
+        ),
+        403: OpenApiResponse(
+            description="دسترسی غیرمجاز. کاربر اجازه آزاد کردن این مخاطب را ندارد.",
+            examples=[
+                OpenApiExample(
+                    "Forbidden",
+                    value={"detail": "شما اجازه آزاد کردن این مخاطب را ندارید."}
+                )
+            ],
+        ),
+        404: OpenApiResponse(
+            description="مخاطب یافت نشد.",
+            examples=[
+                OpenApiExample(
+                    "Not Found",
+                    value={"detail": "مخاطب مورد نظر یافت نشد."}
+                )
+            ],
+        ),
+    },
+)

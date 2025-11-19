@@ -21,7 +21,7 @@ class Contact(models.Model):
     ]
     birth_date = models.DateField(null=True, blank=True, verbose_name="تاریخ تولد")
 
-    project = models.ForeignKey("Project", on_delete=models.CASCADE, related_name="contacts", verbose_name="پروژه")
+    project = models.ForeignKey(Project, on_delete=models.CASCADE, related_name="contacts", verbose_name="پروژه")
     full_name = models.CharField(max_length=100, verbose_name="نام کامل")
     phone = models.CharField(max_length=20, verbose_name="شماره تماس")
     email = models.EmailField(blank=True, verbose_name="ایمیل")

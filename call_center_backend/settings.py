@@ -12,10 +12,10 @@ https://docs.djangoproject.com/en/5.2/ref/settings/
 import os
 from email.policy import default
 from pathlib import Path
-import dj_database_url
-from dotenv import load_dotenv
-from decouple import config
 
+import dj_database_url
+from decouple import config
+from dotenv import load_dotenv
 
 load_dotenv()
 
@@ -89,8 +89,8 @@ INSTALLED_APPS = [
     'django_celery_beat',
     "silk",
     'import_export',
-    'projects',
     'users',
+    'projects',
     'ticket',
     "calls",
     "contacts",
@@ -133,10 +133,8 @@ TEMPLATES = [
 
 WSGI_APPLICATION = 'call_center_backend.wsgi.application'
 
-
 # Database
 # https://docs.djangoproject.com/en/5.2/ref/settings/#databases
-
 
 
 # Password validation
@@ -157,7 +155,6 @@ AUTH_PASSWORD_VALIDATORS = [
     },
 ]
 
-
 # Internationalization
 # https://docs.djangoproject.com/en/5.2/topics/i18n/
 
@@ -165,10 +162,7 @@ LANGUAGE_CODE = 'en-us'
 
 TIME_ZONE = 'UTC'
 
-
 USE_I18N = True
-
-
 
 # Static files (CSS, JavaScript, Images)
 # https://docs.djangoproject.com/en/5.2/howto/static-files/
@@ -222,11 +216,11 @@ CELERY_BEAT_SCHEDULE = {
 
 DATABASES = {
     'default': {
-       'ENGINE': 'django.db.backends.postgresql',
+        'ENGINE': 'django.db.backends.postgresql',
         'NAME': 'call_center_db',
-     'USER': 'postgres',
-       'PASSWORD': '3831',
-       'HOST': 'localhost',
-       'PORT': '5432',
-        }
+        'USER': 'postgres',
+        'PASSWORD': '3831',
+        'HOST': 'localhost',
+        'PORT': '5432',
     }
+}
