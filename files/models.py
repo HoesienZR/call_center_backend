@@ -116,11 +116,6 @@ class Question(models.Model):
         verbose_name = "سوال"
         verbose_name_plural = "سوالات"
 
-    def clean(self):
-        # Enforce at most 5 questions per project
-        if self.project.questions.count() >= 5:
-            raise ValidationError("هر پروژه حداکثر ۵ سوال می‌تواند داشته باشد.")
-        super().clean()
 
     def __str__(self):
         return self.text

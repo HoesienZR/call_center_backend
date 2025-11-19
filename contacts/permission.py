@@ -26,8 +26,8 @@ class IsProjectCaller(BasePermission):
            role='caller'
           ).exists()
 class ReleaseContactPermission(BasePermission):
-    def has_object_permission(self, request, view,obj):
-        if request.user.id == obj.id:
+    def has_object_permission(self, request, view,obj:Contact):
+        if request.user.id == obj.assigned_caller.id:
             return True
 
 
