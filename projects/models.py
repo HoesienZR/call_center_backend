@@ -1,9 +1,6 @@
-from django.conf import settings
-from django.core.exceptions import ValidationError
 from django.db import models
-
-
-# Create your models here.
+from django.conf import settings
+from django.db.models import Sum, Count, Q
 
 class Project(models.Model):
     """مدل برای مدیریت پروژه‌های تماس مختلف"""
@@ -23,10 +20,19 @@ class Project(models.Model):
     members = models.ManyToManyField(settings.AUTH_USER_MODEL, through='ProjectMembership', related_name='projects',
                                      verbose_name="اعضای پروژه")
 
+    class Meta:
+        verbose_name = "پروژه"
+        verbose_name_plural = "پروژه‌ها"
+        ordering = ['-created_at']
+        permissions = [
+            ('manage_project', 'Can manage project'),
+        ]
+
+    def __str__(self):
+        return self.name
+
     def get_statistics(self):
         """دریافت آمار کلی پروژه"""
-        total_contacts = self.contacts.count()
-        total_callers = self.project_callers.filter(is_active=True).count()
         total_calls = self.calls.count()
 
         answered_calls = self.calls.filter(call_result='answered').count()
@@ -37,14 +43,12 @@ class Project(models.Model):
         not_interested_calls = self.calls.filter(call_result='not_interested').count()
         callback_requested_calls = self.calls.filter(call_result='callback_requested').count()
 
-        total_duration = self.calls.aggregate(models.Sum('duration'))['duration__sum'] or 0
+        total_duration = self.calls.aggregate(Sum('duration'))['duration__sum'] or 0
         average_duration = (total_duration / total_calls) if total_calls > 0 else 0
 
         success_rate = (answered_calls / total_calls * 100) if total_calls > 0 else 0
 
         return {
-            'total_contacts': total_contacts,
-            'total_callers': total_callers,
             'total_calls': total_calls,
             'call_results_distribution': {
                 'answered': answered_calls,
@@ -69,7 +73,7 @@ class Project(models.Model):
 
             total_calls = calls_by_caller.count()
             answered_calls = calls_by_caller.filter(call_result='answered').count()
-            total_duration = calls_by_caller.aggregate(models.Sum('duration'))['duration__sum'] or 0
+            total_duration = calls_by_caller.aggregate(Sum('duration'))['duration__sum'] or 0
 
             success_rate = (answered_calls / total_calls * 100) if total_calls > 0 else 0
             average_duration = (total_duration / total_calls) if total_calls > 0 else 0
@@ -86,19 +90,6 @@ class Project(models.Model):
             })
         return caller_performance
 
-    class Meta:
-        verbose_name = "پروژه"
-        verbose_name_plural = "پروژه‌ها"
-        ordering = ['-created_at']
-        permissions = [
-            ('manage_project', 'Can manage project'),
-        ]
-
-    def __str__(self):
-        return self.name
-
-
-# 2. مدل جدید برای مدیریت سطوح دسترسی کاربران در هر پروژه
 class ProjectMembership(models.Model):
     """
     مدل واسط برای تعیین نقش کاربران در هر پروژه.

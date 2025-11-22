@@ -1,12 +1,9 @@
 from django.contrib.auth import get_user_model
 from rest_framework import serializers
-
-from calls.serializers import CallAnswer, CallAnswerSummarySerializer
-from files.serializers import QuestionSerializer, AnswerChoiceSerializer
-from django.contrib.auth import get_user_model
+from .models import Project, ProjectMembership
 from users.serializers import CustomUserSerializer
-from .models import *
 from persiantools.jdatetime import JalaliDate
+from files.serializers import AnswerChoiceSerializer
 
 User = get_user_model()
 
@@ -24,7 +21,6 @@ class ProjectMembershipSerializer(serializers.ModelSerializer):
         fields = ('id', 'project_id', 'user', 'user_id', 'role', 'assigned_at')
         read_only_fields = ('assigned_at',)
 
-
 class ProjectSerializer(serializers.ModelSerializer):
     call_answers_summary = AnswerChoiceSerializer(many=True, read_only=True)
     created_by = CustomUserSerializer(read_only=True)
@@ -35,23 +31,27 @@ class ProjectSerializer(serializers.ModelSerializer):
     persian_updated_at = serializers.SerializerMethodField()
     persian_created_at = serializers.SerializerMethodField()
 
-    def get_project_statistics(self, obj):
-        # اطمینان از اینکه متد `get_statistics` در مدل Project پیاده‌سازی شده است
-        return obj.get_statistics() if hasattr(obj, 'get_statistics') else {}
-
     class Meta:
         model = Project
         fields = (
             'id', 'name', 'description', 'status', 'created_by',
-            'created_by_id', "show", "call_answers_summary", 'persian_updated_at',
+            'created_by_id', 'show', 'call_answers_summary', 'persian_updated_at',
             'persian_created_at', 'project_statistics'
         )
         read_only_fields = ('created_at', 'updated_at',)
 
+    def get_project_statistics(self, obj):
+        """دریافت آمار پروژه"""
+        return obj.get_statistics() if hasattr(obj, 'get_statistics') else {}
+
     def get_persian_updated_at(self, obj):
-        # تبدیل تاریخ به فرمت جلالی
-        return str(JalaliDate(obj.updated_at.date())) if obj.updated_at else None
+        """تبدیل تاریخ به فرمت جلالی"""
+        return self._get_persian_date(obj.updated_at)
 
     def get_persian_created_at(self, obj):
-        # تبدیل تاریخ به فرمت جلالی
-        return str(JalaliDate(obj.created_at.date())) if obj.created_at else None
+        """تبدیل تاریخ به فرمت جلالی"""
+        return self._get_persian_date(obj.created_at)
+
+    def _get_persian_date(self, date_obj):
+        """کمک به تبدیل تاریخ به فرمت جلالی"""
+        return str(JalaliDate(date_obj.date())) if date_obj else None

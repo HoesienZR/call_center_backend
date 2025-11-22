@@ -4,13 +4,12 @@ from django.db.models import Q, Count
 from drf_spectacular.utils import extend_schema
 from rest_framework import status
 from rest_framework.decorators import action, permission_classes
-from rest_framework.generics import get_object_or_404
 from rest_framework.permissions import IsAdminUser, IsAuthenticated
 from rest_framework.response import Response
 from rest_framework import viewsets
 from rest_framework.views import APIView
 
-from call_center_backend import settings
+from django.contrib.auth import get_user_model
 from core.utils import validate_phone_number, normalize_phone_number
 from .utils import assign_available_contact
 from projects.models import ProjectMembership
@@ -29,7 +28,7 @@ from .schema import (
 # تنظیم logger
 logger = logging.getLogger(__name__)
 
-User = settings.AUTH_USER_MODEL
+User = get_user_model()
 
 
 class ContactViewSet(viewsets.ModelViewSet):
@@ -85,30 +84,35 @@ class ContactViewSet(viewsets.ModelViewSet):
 
         # Automatically assign the contact to the caller if no caller is specified
         if not serializer.validated_data.get('assigned_caller'):
-            try:
-                membership = ProjectMembership.objects.get(project=project, user=user)
-                if membership.role == 'caller':
-                    serializer.validated_data['assigned_caller'] = user
-            except ProjectMembership.DoesNotExist:
-                pass
+            self._assign_caller_to_contact(project, user, serializer)
 
         serializer.save(created_by=user)
 
+    def _assign_caller_to_contact(self, project, user, serializer):
+        """
+        Assign the caller automatically if no caller is specified.
+        """
+        try:
+            membership = ProjectMembership.objects.get(project=project, user=user)
+            if membership.role == 'caller':
+                serializer.validated_data['assigned_caller'] = user
+        except ProjectMembership.DoesNotExist:
+            pass
+
     @filter_contact_by_status_and_project_schema
-    @action(detail=False, methods=['get'], url_path="filter_contact_by_status_and_project", permission_classes=[])
+    @action(detail=False, methods=['get'], url_path="filter_contact_by_status_and_project")
     def filter_contact_by_status_and_project(self, request):
         """
         Filter contacts by project ID and status.
         """
         contact_status = self.request.GET.get('status')
         project_id = self.request.GET.get('project_id')
-        if contact_status is None or project_id is None:
-            return Response({'detail': 'Both status and project_id must be provided'},
-                            status=status.HTTP_400_BAD_REQUEST)
 
-        contacts_filtered_by_project_and_status = self._filter_contacts(project_id=project_id,
-                                                                        contact_status=contact_status)
-        serializer = self.get_serializer(contacts_filtered_by_project_and_status, many=True)
+        if not contact_status or not project_id:
+            return self._error_response('Both status and project_id must be provided')
+
+        contacts_filtered = self._filter_contacts(project_id=project_id, contact_status=contact_status)
+        serializer = self.get_serializer(contacts_filtered, many=True)
         return Response(serializer.data, status=status.HTTP_200_OK)
 
     @filter_contact_by_status_schema
@@ -118,8 +122,8 @@ class ContactViewSet(viewsets.ModelViewSet):
         Filter contacts by their status.
         """
         contact_status = self.request.GET.get('status')
-        if contact_status is None:
-            return Response({'detail': 'status must be set'}, status=status.HTTP_400_BAD_REQUEST)
+        if not contact_status:
+            return self._error_response('status must be set')
 
         contact_filter_by_status = self._filter_contacts(contact_status=contact_status)
         serializer = self.get_serializer(contact_filter_by_status, many=True)
@@ -132,12 +136,18 @@ class ContactViewSet(viewsets.ModelViewSet):
         Filter contacts by project ID.
         """
         project_id = self.request.GET.get('project_id')
-        if project_id is None:
-            return Response({'detail': "Invalid or missing project ID"}, status=status.HTTP_400_BAD_REQUEST)
+        if not project_id:
+            return self._error_response("Invalid or missing project ID")
 
         contact_filter_by_project = self._filter_contacts(project_id=project_id)
         serializer = self.get_serializer(contact_filter_by_project, many=True)
         return Response(serializer.data, status=status.HTTP_200_OK)
+
+    def _error_response(self, message):
+        """
+        Return a standard error response.
+        """
+        return Response({'detail': message}, status=status.HTTP_400_BAD_REQUEST)
 
     @action(detail=False, methods=['get'], url_path='request_new')
     def request_new_contact(self, request):
@@ -146,13 +156,13 @@ class ContactViewSet(viewsets.ModelViewSet):
         """
         project_id = request.data.get('project_id')
         if not project_id:
-            return Response({"detail": "Project ID is required."}, status=status.HTTP_400_BAD_REQUEST)
+            return self._error_response("Project ID is required.")
 
         try:
             project = Project.objects.get(id=project_id)
 
             if not ProjectMembership.objects.filter(project=project, user=request.user).exists():
-                return Response({"detail": "You are not a member of this project."}, status=status.HTTP_403_FORBIDDEN)
+                return self._error_response("You are not a member of this project.")
 
             available_contact = Contact.objects.filter(
                 project=project,
@@ -164,18 +174,11 @@ class ContactViewSet(viewsets.ModelViewSet):
             if available_contact:
                 available_contact.assigned_caller = request.user
                 available_contact.save()
-                return Response(
-                    {"detail": "A new contact has been assigned to you."},
-                    status=status.HTTP_200_OK
-                )
+                return Response({"detail": "A new contact has been assigned to you."}, status=status.HTTP_200_OK)
             else:
-                return Response(
-                    {"detail": "No available contacts to assign."},
-                    status=status.HTTP_404_NOT_FOUND
-                )
-
+                return self._error_response("No available contacts to assign.")
         except Project.DoesNotExist:
-            return Response({"detail": "Project not found."}, status=status.HTTP_404_NOT_FOUND)
+            return self._error_response("Project not found.")
 
     @release_contact_schema
     @action(detail=True, methods=['post'], url_path='release', permission_classes=[ReleaseContactPermission])
@@ -207,7 +210,7 @@ class ContactViewSet(viewsets.ModelViewSet):
         """
         contact = self.get_object()
 
-        if not contact.assigned_caller == request.user:
+        if contact.assigned_caller != request.user:
             return Response({"detail": "You are not authorized to submit a call for this contact."},
                             status=status.HTTP_403_FORBIDDEN)
 
@@ -221,7 +224,6 @@ class ContactViewSet(viewsets.ModelViewSet):
             project=contact.project
         )
 
-        call_result = serializer.validated_data.get('call_result')
         status_map = {
             'answered': 'contacted',
             'callback_requested': 'follow_up',
@@ -230,7 +232,7 @@ class ContactViewSet(viewsets.ModelViewSet):
         }
 
         # Update the contact's status based on the call result
-        contact.call_status = status_map.get(call_result, contact.call_status)
+        contact.call_status = status_map.get(call.call_result, contact.call_status)
         contact.save()
 
         return Response({"detail": "Call has been successfully submitted."}, status=status.HTTP_200_OK)
@@ -243,6 +245,7 @@ class ContactViewSet(viewsets.ModelViewSet):
         """
         contact = self.get_object()
         serializer = ContactStatsSerializer(contact, context={'request': request})
+
         if serializer.is_valid():
             return Response(serializer.data, status=status.HTTP_200_OK)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
@@ -269,20 +272,11 @@ class RequestNewContactView(APIView):
     def post(self, request):
         project_id = request.data.get("project_id")
         if not project_id:
-            return Response(
-                {"detail": "Project ID is required."},
-                status=status.HTTP_400_BAD_REQUEST
-            )
+            return Response({"detail": "Project ID is required."}, status=status.HTTP_400_BAD_REQUEST)
 
         project = get_object_or_404(Project, id=project_id)
 
         if assign_available_contact(project, request.user):
-            return Response(
-                {"detail": "A new contact has been successfully assigned to you."},
-                status=status.HTTP_200_OK
-            )
+            return Response({"detail": "A new contact has been successfully assigned to you."}, status=status.HTTP_200_OK)
 
-        return Response(
-            {"detail": "No available contacts to assign at the moment."},
-            status=status.HTTP_404_NOT_FOUND
-        )
+        return Response({"detail": "No available contacts to assign at the moment."}, status=status.HTTP_404_NOT_FOUND)

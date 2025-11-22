@@ -1,29 +1,28 @@
 import logging
 import traceback
-from io import BytesIO
-
-import jdatetime
-import pandas as pd
 from django.db import transaction
 from django.db.models import Prefetch
 from django.http import HttpResponse
 from rest_framework import viewsets, status
-from rest_framework.decorators import action
+from rest_framework.views import APIView
+from rest_framework.viewsets import mixins, generics
+from rest_framework.decorators import action, api_view
 from rest_framework.exceptions import PermissionDenied
 from rest_framework.generics import get_object_or_404
-from rest_framework.permissions import IsAuthenticated
+from rest_framework.permissions import IsAuthenticated, IsAdminUser
 from rest_framework.response import Response
-from rest_framework.views import APIView
-from rest_framework.permissions import IsAdminUser
 from core.utils import generate_username
-from contacts.models import Contact
 from core.permissions import IsReadOnlyOrProjectAdmin, IsProjectAdmin
-from core.utils import normalize_phone_number, validate_phone_number
+from contacts.models import Contact
 from files.models import Question, UploadedFile
 from .serializers import *
-from rest_framework.decorators import action, api_view
-from rest_framework import generics, mixins
-from .utils import clean_string_field, import_caller_from_excel, check_if_user_exist, check_if_project_membership_exist, toggle_user_project_membership_role
+from .utils import (
+    clean_string_field,
+    import_caller_from_excel,
+    check_if_user_exist,
+    check_if_project_membership_exist,
+    toggle_user_project_membership_role
+)
 from .schema import (
     project_list_schema,
     project_create_schema,
@@ -81,22 +80,20 @@ class ProjectViewSet(viewsets.ModelViewSet):
         user_id = request.data.get('user_id')
 
         if not project_id:
-            return Response({'error': 'شناسه پروژه الزامی است'}, status=status.HTTP_400_BAD_REQUEST)
+            return self._error_response('شناسه پروژه الزامی است')
 
         if not user_id:
-            return Response({'error': 'شناسه کاربر الزامی است'}, status=status.HTTP_400_BAD_REQUEST)
+            return self._error_response('شناسه کاربر الزامی است')
 
         try:
             project_membership = ProjectMembership.objects.get(project_id=project_id, user_id=user_id)
         except ProjectMembership.DoesNotExist:
-            return Response({'error': 'membership not found'}, status=status.HTTP_404_NOT_FOUND)
+            return self._error_response('membership not found', status=status.HTTP_404_NOT_FOUND)
         except ProjectMembership.MultipleObjectsReturned:
-            return Response({'error': "multiple roles returned"}, status=status.HTTP_400_BAD_REQUEST)
+            return self._error_response("multiple roles returned", status=status.HTTP_400_BAD_REQUEST)
 
         serializer = ProjectMembershipSerializer(project_membership)
-        if serializer.is_valid():
-            return Response(serializer.data, status=status.HTTP_200_OK)
-        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+        return Response(serializer.data, status=status.HTTP_200_OK)
 
     @caller_performance_schema
     @action(detail=True, methods=["get"], permission_classes=[IsAuthenticated, IsProjectAdmin])
@@ -104,6 +101,10 @@ class ProjectViewSet(viewsets.ModelViewSet):
         project = self.get_object()
         report = project.get_caller_performance_report()
         return Response(report)
+
+    def _error_response(self, message, status=status.HTTP_400_BAD_REQUEST):
+        """کمک به ارسال پاسخ خطا"""
+        return Response({'error': message}, status=status)
 
 class ProjectMembershipApiListView(mixins.ListModelMixin, generics.GenericAPIView):
     queryset = ProjectMembership.objects.select_related("project", "user")
@@ -132,13 +133,13 @@ class CallerImportView(APIView):
         file_obj = request.FILES.get("file")
 
         if not file_obj:
-            return Response({"error": "excel didn't received "}, status=status.HTTP_400_BAD_REQUEST)
+            return self._error_response("فایل اکسل دریافت نشد", status=status.HTTP_400_BAD_REQUEST)
 
         try:
             created_contacts = import_caller_from_excel(file_obj, project)
             return Response(
                 {
-                    "message": f"{len(created_contacts)} callers added",
+                    "message": f"{len(created_contacts)} تماس‌گیرنده اضافه شدند",
                     "created_count": len(created_contacts),
                     "contacts": created_contacts,  # شامل شماره و نام
                     "project": project.name,
@@ -147,10 +148,11 @@ class CallerImportView(APIView):
             )
         except Exception as e:
             traceback.print_exc()
-            return Response(
-                {"error": f"Error at progress of {str(e)}"},
-                status=status.HTTP_400_BAD_REQUEST
-            )
+            return self._error_response(f"خطا در فرآیند: {str(e)}", status=status.HTTP_400_BAD_REQUEST)
+
+    def _error_response(self, message, status=status.HTTP_400_BAD_REQUEST):
+        """کمک به ارسال پاسخ خطا"""
+        return Response({"error": message}, status=status)
 
 @toggle_user_role_schema
 @api_view(["GET", ])
@@ -162,7 +164,7 @@ def toggle_user_role(request):
         old_role, new_role = toggle_user_project_membership_role(project=project, user=user, project_membership=project_membership)
     except Exception as e:
         traceback.print_exc()
-        return Response({"error": f"Error at progress of {str(e)}"}, status=status.HTTP_400_BAD_REQUEST)
+        return Response({"error": f"خطا در فرآیند: {str(e)}"}, status=status.HTTP_400_BAD_REQUEST)
 
     response_data = {
         'message': 'نقش کاربر با موفقیت تغییر یافت',
