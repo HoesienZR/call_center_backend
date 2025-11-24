@@ -5,13 +5,6 @@ from django.urls import reverse
 from calls.models import Call, Contact, Project
 from django.contrib.auth import get_user_model
 
-# تنظیمات تست
-import os
-
-os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'call_center_backend.settings')
-
-import django
-django.setup()
 
 User = get_user_model()
 

@@ -4,8 +4,8 @@ from drf_spectacular.utils import (
     OpenApiResponse,
     OpenApiExample,
 )
-from .serializers import ProjectSerializer, ProjectMembershipSerializer
 
+from .serializers import ProjectSerializer, ProjectMembershipSerializer
 
 # =====================================================
 # --- ProjectViewSet Schemas
@@ -44,7 +44,6 @@ project_list_schema = extend_schema(
         ),
     ],
 )
-
 
 project_create_schema = extend_schema(
     summary="Create a new project",
@@ -94,7 +93,6 @@ project_create_schema = extend_schema(
     ],
 )
 
-
 check_user_role_schema = extend_schema(
     summary="Check user's role in a project",
     description="Checks a user's role in a specified project.",
@@ -127,7 +125,6 @@ check_user_role_schema = extend_schema(
     ],
 )
 
-
 caller_performance_schema = extend_schema(
     summary="Get caller performance report",
     description="Returns a performance report for all callers in the project.",
@@ -148,7 +145,6 @@ caller_performance_schema = extend_schema(
         )
     ],
 )
-
 
 # =====================================================
 # --- ProjectMembershipApiListView Schemas
@@ -185,7 +181,6 @@ project_membership_list_schema = extend_schema(
         )
     ],
 )
-
 
 # =====================================================
 # --- CallerImportView Schema
@@ -227,7 +222,6 @@ caller_import_schema = extend_schema(
         )
     ],
 )
-
 
 # =====================================================
 # --- toggle_user_role Schema

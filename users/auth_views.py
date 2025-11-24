@@ -1,12 +1,14 @@
-from rest_framework.authtoken.views import ObtainAuthToken
-from rest_framework.authtoken.models import Token
-from rest_framework.response import Response
+from django.contrib.auth import authenticate
 from rest_framework import status
+from rest_framework.authtoken.models import Token
+from rest_framework.authtoken.views import ObtainAuthToken
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import AllowAny
-from django.contrib.auth import authenticate
+from rest_framework.response import Response
+
 from .models import CustomUser as User
 from .serializers import CustomUserSerializer
+from .services import auth_schema
 from .services import otp_service
 
 
@@ -33,6 +35,7 @@ class CustomAuthToken(ObtainAuthToken):
         })
 
 
+@auth_schema.login_post_schema
 @api_view(['POST'])
 @permission_classes([AllowAny])
 def login(request):
@@ -78,6 +81,7 @@ def login(request):
     })
 
 
+@auth_schema.logout_post_schema
 @api_view(['POST'])
 def logout(request):
     """
@@ -94,6 +98,7 @@ def logout(request):
         }, status=status.HTTP_400_BAD_REQUEST)
 
 
+@auth_schema.user_profile_get_schema
 @api_view(['GET'])
 def user_profile(request):
     """
@@ -103,6 +108,7 @@ def user_profile(request):
     return Response(serializer.data)
 
 
+@auth_schema.register_post_schema
 @api_view(['POST'])
 @permission_classes([AllowAny])
 def register(request):
@@ -171,6 +177,7 @@ def register(request):
         }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
+@auth_schema.request_otp_post_schema
 @api_view(['POST'])
 @permission_classes([AllowAny])
 def request_otp(request):
@@ -194,6 +201,7 @@ def request_otp(request):
     return Response({"message": "کد OTP (تست): " + otp_code}, status=status.HTTP_200_OK)
 
 
+@auth_schema.verify_otp_post_schema
 @api_view(['POST'])
 @permission_classes([AllowAny])
 def verify_otp(request):

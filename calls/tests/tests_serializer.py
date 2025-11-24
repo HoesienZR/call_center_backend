@@ -3,11 +3,7 @@ from calls.serializers import CallSerializer, CallAnswerSerializer
 from calls.models import Call, CallAnswer
 from django.test import TestCase
 
-import os
-os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'call_center_backend.settings')
 
-import django
-django.setup()
 
 class CallSerializerTest(TestCase):
     def setUp(self):
