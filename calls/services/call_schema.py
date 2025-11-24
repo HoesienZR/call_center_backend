@@ -1,4 +1,4 @@
-from drf_spectacular.utils import extend_schema, OpenApiParameter, OpenApiExample, OpenApiResponse
+from drf_spectacular.utils import extend_schema, OpenApiParameter, OpenApiExample, OpenApiResponse, extend_schema_view
 from calls.serializers import CallSerializer, CallEditHistorySerializer
 from calls.models import Call, CallEditHistory, CallAnswer
 from contacts.models import Contact
@@ -147,4 +147,27 @@ retrieve_call_edit_history_schema = extend_schema(
         404: OpenApiResponse(description="رکورد پیدا نشد"),
         403: OpenApiResponse(description="دسترسی غیرمجاز"),
     }
+)
+
+
+call_edit_history_schema = extend_schema_view(
+    list=extend_schema(
+        summary="لیست تاریخچه ویرایش تماس‌ها",
+        description=(
+            "نمایش لیست تمام رکوردهای CallEditHistory.\n"
+            "هر رکورد نشان می‌دهد کدام فیلد یک تماس، توسط چه کسی و چه زمانی "
+            "از چه مقدار به چه مقدار تغییر کرده است."
+        ),
+        tags=["Call Edit History"],
+        responses={200: CallEditHistorySerializer(many=True)},
+    ),
+    retrieve=extend_schema(
+        summary="جزییات یک رکورد تاریخچه ویرایش تماس",
+        description=(
+            "نمایش جزییات یک رکورد CallEditHistory براساس شناسه.\n"
+            "شامل نام فیلد، مقدار قبلی، مقدار جدید، ویرایش‌کننده و زمان ویرایش."
+        ),
+        tags=["Call Edit History"],
+        responses={200: CallEditHistorySerializer},
+    ),
 )

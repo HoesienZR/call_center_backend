@@ -9,7 +9,7 @@ from rest_framework.response import Response
 from .serializers import CallSerializer, CallEditHistorySerializer, CallAnswerSerializer
 from .models import CallAnswer, Call, CallEditHistory
 from .services.call_schema import call_schema, project_filter_schema, call_create_detail_schema, \
-    call_edit_changesubmit_schema, caller_feedback_schema, detailed_report_schema
+    call_edit_changesubmit_schema, caller_feedback_schema, detailed_report_schema, call_edit_history_schema
 from contacts.models import Contact
 from projects.models import Project
 
@@ -178,7 +178,7 @@ class CallViewSet(viewsets.ModelViewSet):
         call.save()
         return Response(self.get_serializer(call).data, status=status.HTTP_200_OK)
 
-
+@call_edit_history_schema
 class CallEditHistoryViewSet(viewsets.ReadOnlyModelViewSet):
     queryset = CallEditHistory.objects.all()
     serializer_class = CallEditHistorySerializer
