@@ -2,7 +2,6 @@
 from django.contrib.auth import get_user_model
 
 
-
 # third party package
 from persiantools.jdatetime import JalaliDate
 from rest_framework import serializers

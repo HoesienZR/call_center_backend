@@ -7,7 +7,7 @@ from .models import Call
 @receiver(post_save, sender=Call)
 def update_contact_call_status(sender, instance, created, **kwargs):
     """
-    بعد از ذخیره هر تماس، وضعیت تماس مخاطب را به‌روزرسانی کن
+    Update contact's call status after saving each call
     """
     if instance.contact:
         instance.contact.call_status = instance.status

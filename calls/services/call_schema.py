@@ -1,87 +1,90 @@
-from drf_spectacular.utils import extend_schema, OpenApiParameter, OpenApiExample, OpenApiResponse, extend_schema_view
+from drf_spectacular.utils import (
+    extend_schema,
+    OpenApiParameter,
+    OpenApiExample,
+    OpenApiResponse,
+    extend_schema_view,
+)
+
 from calls.serializers import CallSerializer, CallEditHistorySerializer
-from calls.models import Call, CallEditHistory, CallAnswer
-from contacts.models import Contact
-from projects.models import Project
 
-
-# اسکیمای عمومی برای مدیریت تماس‌ها
+# General schema for call management
 call_schema = extend_schema(
     tags=["Calls"],
-    description="مدیریت تماس‌ها شامل مشاهده، ایجاد، ویرایش و ثبت بازخورد"
+    description="Manage calls: view, create, edit, and submit feedback."
 )
 
-# اسکیمای فیلتر بر اساس پروژه
+# Filter schema based on project
 project_filter_schema = extend_schema(
     parameters=[
-        OpenApiParameter("project_id", str, description="فیلتر تماس‌ها بر اساس ID پروژه", required=False),
+        OpenApiParameter("project_id", str, description="Filter calls by project ID", required=False),
     ],
-    description="نمایش لیست تماس‌ها بر اساس سطح دسترسی کاربر و شناسه پروژه (در صورت وجود)."
+    description="Display calls based on user permissions and optionally filter by project ID."
 )
 
-# اسکیمای ایجاد تماس جدید
+# Schema → Create a new call
 call_create_detail_schema = extend_schema(
-    description="ایجاد یک تماس جدید با جزئیات کامل تماس.",
+    description="Create a new call with full call details.",
     request=CallSerializer,
     responses={201: CallSerializer},
     examples=[
         OpenApiExample(
-            "نمونه درخواست تماس جدید",
+            "New Call Example",
             value={
                 "contact_id": 5,
                 "project_id": 3,
                 "status": "completed",
                 "call_result": "successful",
-                "notes": "تماس موفق انجام شد.",
+                "notes": "The call was successfully completed.",
                 "duration": 120
             }
         )
     ]
 )
 
-# اسکیمای ویرایش تماس و ثبت تاریخچه تغییرات
+# Schema → Edit call and submit change history
 call_edit_changesubmit_schema = extend_schema(
-    description="ویرایش اطلاعات تماس با ثبت تاریخچه تغییرات.",
+    description="Edit an existing call and record all field change history.",
     request=CallSerializer,
     responses={200: CallSerializer},
     examples=[
         OpenApiExample(
-            "نمونه ویرایش تماس",
-            value={"notes": "به مشتری اطلاع داده شد.", "edit_reason": "به‌روزرسانی یادداشت‌ها"}
+            "Edit Call Example",
+            value={"notes": "Customer was informed.", "edit_reason": "Updated notes"}
         )
     ]
 )
 
-# اسکیمای ثبت بازخورد تماس توسط تماس‌گیرنده
+# Schema → Submit feedback by the caller
 caller_feedback_schema = extend_schema(
-    description="ثبت بازخورد تماس توسط تماس‌گیرنده.",
+    description="Submit feedback on a call by the caller.",
     request={
         "type": "object",
         "properties": {
             "notes": {
                 "type": "string",
-                "example": "مشتری پاسخ نداد.",
-                "description": "یادداشت یا توضیحی درباره وضعیت تماس."
+                "example": "The customer did not answer.",
+                "description": "A note or comment about the call result."
             },
             "status": {
                 "type": "string",
                 "example": "failed",
-                "description": "وضعیت نهایی تماس (مثال: failed, completed)."
+                "description": "The final call status (e.g. failed, completed)."
             }
         }
     },
     responses={200: CallSerializer}
 )
 
-# اسکیمای ثبت گزارش تفصیلی برای تماس
+# Schema → Submit detailed report
 detailed_report_schema = extend_schema(
-    description="ثبت گزارش تفصیلی برای تماس (مناسب برای گزارش‌های کامل تماس‌ها).",
+    description="Submit a detailed report for a call (suitable for full call summaries).",
     request={
         "type": "object",
         "properties": {
             "report_data": {
                 "type": "object",
-                "example": {"summary": "مذاکره درباره قرارداد جدید"}
+                "example": {"summary": "Discussion about a new contract."}
             },
             "call_status": {
                 "type": "string",
@@ -92,17 +95,17 @@ detailed_report_schema = extend_schema(
     responses={200: CallSerializer}
 )
 
-# اسکیمای GET لیست تاریخچه ویرایش تماس‌ها
+# Schema → GET list of call edit histories
 list_call_edit_history_schema = extend_schema(
-    summary="لیست تاریخچه ویرایش تماس‌ها",
-    description="دریافت لیست تمام تاریخچه‌های ویرایش تماس‌ها. فقط کاربران admin دسترسی دارند.",
+    summary="List call edit history records",
+    description="Retrieve a list of all call edit history records. Only admin users have access.",
     responses={
         200: OpenApiResponse(
             response=CallEditHistorySerializer,
-            description="لیست تاریخچه ویرایش تماس‌ها",
+            description="List of call edit history records.",
             examples=[
                 OpenApiExample(
-                    "نمونه پاسخ",
+                    "Example Response",
                     value=[{
                         "id": 1,
                         "call": 101,
@@ -111,26 +114,26 @@ list_call_edit_history_schema = extend_schema(
                         "field_name": "status",
                         "old_value": "pending",
                         "new_value": "completed",
-                        "edit_reason": "تایید توسط سرپرست"
+                        "edit_reason": "Approved by supervisor"
                     }]
                 )
             ]
         ),
-        403: OpenApiResponse(description="دسترسی غیرمجاز"),
+        403: OpenApiResponse(description="Forbidden"),
     }
 )
 
-# اسکیمای GET جزئیات تاریخچه ویرایش تماس
+# Schema → GET details of a specific call edit history record
 retrieve_call_edit_history_schema = extend_schema(
-    summary="جزئیات تاریخچه ویرایش تماس",
-    description="دریافت یک رکورد مشخص از تاریخچه ویرایش تماس با ID.",
+    summary="Retrieve a call edit history record",
+    description="Retrieve a single call edit history record by its ID.",
     responses={
         200: OpenApiResponse(
             response=CallEditHistorySerializer,
-            description="جزئیات یک تاریخچه ویرایش تماس",
+            description="Details of a call edit history record.",
             examples=[
                 OpenApiExample(
-                    "نمونه پاسخ",
+                    "Example Response",
                     value={
                         "id": 1,
                         "call": 101,
@@ -139,33 +142,33 @@ retrieve_call_edit_history_schema = extend_schema(
                         "field_name": "status",
                         "old_value": "pending",
                         "new_value": "completed",
-                        "edit_reason": "تایید توسط سرپرست"
+                        "edit_reason": "Approved by supervisor"
                     }
                 )
             ]
         ),
-        404: OpenApiResponse(description="رکورد پیدا نشد"),
-        403: OpenApiResponse(description="دسترسی غیرمجاز"),
+        404: OpenApiResponse(description="Record not found"),
+        403: OpenApiResponse(description="Forbidden"),
     }
 )
 
-
+# Combined view schema for CallEditHistory endpoints
 call_edit_history_schema = extend_schema_view(
     list=extend_schema(
-        summary="لیست تاریخچه ویرایش تماس‌ها",
+        summary="List all call edit history records",
         description=(
-            "نمایش لیست تمام رکوردهای CallEditHistory.\n"
-            "هر رکورد نشان می‌دهد کدام فیلد یک تماس، توسط چه کسی و چه زمانی "
-            "از چه مقدار به چه مقدار تغییر کرده است."
+            "Displays a list of all CallEditHistory records.\n"
+            "Each record shows which field of a call was modified, by whom, when, "
+            "and from which value to which new value."
         ),
         tags=["Call Edit History"],
         responses={200: CallEditHistorySerializer(many=True)},
     ),
     retrieve=extend_schema(
-        summary="جزییات یک رکورد تاریخچه ویرایش تماس",
+        summary="Get details of a single call edit history record",
         description=(
-            "نمایش جزییات یک رکورد CallEditHistory براساس شناسه.\n"
-            "شامل نام فیلد، مقدار قبلی، مقدار جدید، ویرایش‌کننده و زمان ویرایش."
+            "Retrieve a single CallEditHistory record by its ID.\n"
+            "Includes field name, old value, new value, editor, and edit timestamp."
         ),
         tags=["Call Edit History"],
         responses={200: CallEditHistorySerializer},

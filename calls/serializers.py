@@ -6,12 +6,13 @@ from calls.calls_import import (
     Question,
     AnswerChoice,
     Project,
-    CustomUserSerializer,QuestionSerializer,AnswerChoiceSerializer
+    CustomUserSerializer, QuestionSerializer, AnswerChoiceSerializer
 )
 
 from .models import CallAnswer, Call, CallEditHistory
 
 User = get_user_model()
+
 
 class CallAnswerSummarySerializer(serializers.ModelSerializer):
     question = QuestionSerializer(read_only=True)
@@ -21,16 +22,19 @@ class CallAnswerSummarySerializer(serializers.ModelSerializer):
         model = CallAnswer
         fields = ['question', 'selected_choice']
 
+
 class CallAnswerSerializer(serializers.ModelSerializer):
     """Serializer for call answers (used internally)."""
     question = serializers.PrimaryKeyRelatedField(queryset=Question.objects.all())
     question_text = serializers.CharField(source='question.text', read_only=True)
-    selected_choice = serializers.PrimaryKeyRelatedField(queryset=AnswerChoice.objects.all(), allow_null=True, required=False)
+    selected_choice = serializers.PrimaryKeyRelatedField(queryset=AnswerChoice.objects.all(), allow_null=True,
+                                                         required=False)
     selected_choice_text = serializers.CharField(source='selected_choice.text', read_only=True)
 
     class Meta:
         model = CallAnswer
         fields = ['question', 'selected_choice', 'question_text', 'selected_choice_text']
+
 
 class CallSerializer(serializers.ModelSerializer):
     answers = CallAnswerSerializer(many=True, required=False)
@@ -44,7 +48,8 @@ class CallSerializer(serializers.ModelSerializer):
     contact_id = serializers.PrimaryKeyRelatedField(queryset=Contact.objects.all(), source='contact', write_only=True)
     caller_id = serializers.PrimaryKeyRelatedField(queryset=User.objects.all(), source='caller', write_only=True)
     project_id = serializers.PrimaryKeyRelatedField(queryset=Project.objects.all(), source='project', write_only=True)
-    edited_by_id = serializers.PrimaryKeyRelatedField(queryset=User.objects.all(), source='edited_by', write_only=True, allow_null=True, required=False)
+    edited_by_id = serializers.PrimaryKeyRelatedField(queryset=User.objects.all(), source='edited_by', write_only=True,
+                                                      allow_null=True, required=False)
 
     class Meta:
         model = Call
@@ -84,6 +89,7 @@ class CallSerializer(serializers.ModelSerializer):
             if invalid_questions:
                 raise serializers.ValidationError(f"Invalid questions: {list(invalid_questions)}")
         return data
+
 
 class CallEditHistorySerializer(serializers.ModelSerializer):
     edited_by_id = serializers.PrimaryKeyRelatedField(queryset=User.objects.all(), source='edited_by', write_only=True)

@@ -1,22 +1,21 @@
 from django.test import TestCase
 from django.contrib.auth import get_user_model
 from calls.models import Call, CallAnswer, CallEditHistory
-from calls.calls_import import Project, Contact
+from calls.calls_import import Project, Contact, Question, AnswerChoice
 from django.db.utils import IntegrityError
 
 User = get_user_model()
 
 
-
 class CallModelTest(TestCase):
     def setUp(self):
-        # ایجاد کاربران و پروژه‌ها برای تست
+        """Create initial test data: user, contact, project."""
         self.user = User.objects.create_user(username="caller", password="password123")
         self.contact = Contact.objects.create(full_name="Test Contact", phone="123456789")
         self.project = Project.objects.create(name="Test Project", created_by=self.user)
 
     def test_create_call(self):
-        # تست ساخت یک تماس
+        """Test creating a call record."""
         call = Call.objects.create(
             contact=self.contact,
             caller=self.user,
@@ -30,7 +29,7 @@ class CallModelTest(TestCase):
         self.assertEqual(call.project.name, "Test Project")
 
     def test_call_history_creation(self):
-        # تست ایجاد تاریخچه ویرایش تماس
+        """Test that an edit history entry is created automatically."""
         call = Call.objects.create(
             contact=self.contact,
             caller=self.user,
@@ -42,7 +41,7 @@ class CallModelTest(TestCase):
         self.assertEqual(CallEditHistory.objects.count(), 1)
 
     def test_signal_on_create_call(self):
-        # تست سیگنال post_save برای تاریخچه ویرایش
+        """Test automatic post-save behavior for creating edit history."""
         call = Call.objects.create(
             contact=self.contact,
             caller=self.user,
@@ -54,8 +53,10 @@ class CallModelTest(TestCase):
         history = CallEditHistory.objects.first()
         self.assertEqual(history.field_name, "initial_save")
 
+
 class CallAnswerModelTest(TestCase):
     def setUp(self):
+        """Prepare initial data for CallAnswer tests."""
         self.user = User.objects.create_user(username="caller", password="password123")
         self.contact = Contact.objects.create(full_name="Test Contact", phone="123456789")
         self.project = Project.objects.create(name="Test Project", created_by=self.user)
@@ -71,6 +72,7 @@ class CallAnswerModelTest(TestCase):
         self.answer_choice = AnswerChoice.objects.create(text="Yes")
 
     def test_create_call_answer(self):
+        """Test creating a CallAnswer entry."""
         call_answer = CallAnswer.objects.create(
             call=self.call,
             question=self.question,
