@@ -1,25 +1,26 @@
-from drf_spectacular.utils import extend_schema, OpenApiParameter, OpenApiExample, OpenApiResponse
 from drf_spectacular.types import OpenApiTypes
+from drf_spectacular.utils import extend_schema, OpenApiParameter, OpenApiExample, OpenApiResponse
 
 from contacts.serializers import ContactSerializer, ContactStatsSerializer
 
+# Filter contacts by status + project
 filter_contact_by_status_and_project_schema = extend_schema(
     tags=['Contacts', 'Filter'],
-    summary="فیلتر مخاطبین بر اساس وضعیت و پروژه",
+    summary="Filter contacts by status and project",
     description=(
-        "لیستی از مخاطبین که بر اساس `status` و `project_id` فیلتر شده‌اند را برمی‌گرداند. "
-        "این لیست شامل اطلاعات تماس‌گیرنده تخصیص داده‌شده، پروژه مربوطه و یادداشت‌های مرتبط با هر مخاطب می‌باشد."
+        "Returns a list of contacts filtered by `status` and `project_id`. "
+        "The list includes assigned caller information, project details, and any related notes."
     ),
     parameters=[
         OpenApiParameter(
             name='status',
-            description='فیلتر مخاطبین بر اساس وضعیت تماس آنها',
+            description='Filter contacts by their call status.',
             required=True,
             type=OpenApiTypes.STR
         ),
         OpenApiParameter(
             name='project_id',
-            description='فیلتر مخاطبین بر اساس پروژه خاص',
+            description='Filter contacts belonging to a specific project.',
             required=True,
             type=OpenApiTypes.INT
         ),
@@ -27,20 +28,21 @@ filter_contact_by_status_and_project_schema = extend_schema(
     responses={
         200: OpenApiResponse(
             response=ContactSerializer,
-            description="لیستی از مخاطبین فیلتر شده بر اساس وضعیت و پروژه."
+            description="List of contacts filtered by status and project."
         ),
-        400: OpenApiResponse(description="پارامترهای جستجو ناقص یا نامعتبر هستند.")
+        400: OpenApiResponse(description="Missing or invalid query parameters.")
     }
 )
 
+# Filter contacts by status only
 filter_contact_by_status_schema = extend_schema(
     tags=['Contacts', 'Filter'],
-    summary="فیلتر مخاطبین بر اساس وضعیت",
-    description="تمام مخاطبانی که با وضعیت داده‌شده مطابقت دارند را برمی‌گرداند.",
+    summary="Filter contacts by status",
+    description="Returns all contacts that match the given status.",
     parameters=[
         OpenApiParameter(
             name='status',
-            description='وضعیت مخاطبین برای فیلتر کردن',
+            description='The status used to filter contacts.',
             required=True,
             type=OpenApiTypes.STR
         ),
@@ -48,20 +50,21 @@ filter_contact_by_status_schema = extend_schema(
     responses={
         200: OpenApiResponse(
             response=ContactSerializer,
-            description="لیست مخاطبین فیلتر شده."
+            description="List of filtered contacts."
         ),
-        400: OpenApiResponse(description="پارامتر وضعیت مشخص نشده است.")
+        400: OpenApiResponse(description="Status parameter is missing.")
     }
 )
 
+# Filter contacts by project only
 filter_contact_by_project_schema = extend_schema(
     tags=['Contacts', 'Filter'],
-    summary="فیلتر مخاطبین بر اساس پروژه",
-    description="تمام مخاطبینی که به پروژه مشخص تعلق دارند را برمی‌گرداند.",
+    summary="Filter contacts by project",
+    description="Returns all contacts belonging to the specified project.",
     parameters=[
         OpenApiParameter(
             name='project_id',
-            description='شناسه پروژه برای فیلتر کردن',
+            description='The project ID used for filtering.',
             required=True,
             type=OpenApiTypes.INT
         ),
@@ -69,30 +72,32 @@ filter_contact_by_project_schema = extend_schema(
     responses={
         200: OpenApiResponse(
             response=ContactSerializer,
-            description="لیستی از مخاطبین متعلق به پروژه مشخص."
+            description="List of contacts belonging to the specified project."
         ),
-        400: OpenApiResponse(description="شناسه پروژه وارد نشده یا نامعتبر است.")
+        400: OpenApiResponse(description="Missing or invalid project ID.")
     }
 )
 
+# Get contact statistics
 get_contact_stats_schema = extend_schema(
     tags=['Contacts', 'Statistics'],
-    summary="دریافت آمار مخاطب",
-    description="آمار مربوط به هر مخاطب مانند تعداد تماس‌ها، تماس‌های پاسخ داده‌شده و ... را دریافت می‌کند.",
+    summary="Retrieve contact statistics",
+    description="Returns statistics for a contact such as total calls, answered calls, and more.",
     responses={
         200: OpenApiResponse(
             response=ContactStatsSerializer,
-            description="آمار دقیق از مخاطب."
+            description="Detailed contact statistics."
         ),
-        400: OpenApiResponse(description="داده‌های مخاطب نامعتبر است.")
+        400: OpenApiResponse(description="Invalid contact data.")
     }
 )
 
+# Request a new contact for a project
 request_new_contact_schema = extend_schema(
-    summary="درخواست یک مخاطب جدید برای پروژه",
+    summary="Request a new contact for a project",
     description=(
-        "یک مخاطب آزاد از پروژه انتخاب‌شده را به کاربر احراز هویت شده تخصیص می‌دهد. "
-        "کاربر باید مجوزهای تماس‌گیرنده، ادمین پروژه یا ادمین سیستم را داشته باشد."
+        "Assigns an available contact from the selected project to the authenticated user. "
+        "The user must be a caller, project admin, or system admin."
     ),
     request={
         "application/json": {
@@ -100,7 +105,7 @@ request_new_contact_schema = extend_schema(
             "properties": {
                 "project_id": {
                     "type": "integer",
-                    "description": "شناسه پروژه‌ای که مخاطب باید به آن تخصیص داده شود.",
+                    "description": "ID of the project to request a new contact from.",
                     "example": 42,
                 }
             },
@@ -109,29 +114,29 @@ request_new_contact_schema = extend_schema(
     },
     responses={
         200: OpenApiResponse(
-            description="مخاطب جدید با موفقیت به شما تخصیص داده شد.",
+            description="A new contact was successfully assigned to you.",
             examples=[
                 OpenApiExample(
                     "Success",
-                    value={"detail": "یک مخاطب جدید با موفقیت به شما تخصیص داده شد."}
+                    value={"detail": "A new contact was successfully assigned to you."}
                 )
             ],
         ),
         400: OpenApiResponse(
-            description="شناسه پروژه وارد نشده یا نامعتبر است.",
+            description="Missing or invalid project ID.",
             examples=[
                 OpenApiExample(
                     "Missing ID",
-                    value={"detail": "شناسه پروژه مورد نیاز است."}
+                    value={"detail": "Project ID is required."}
                 )
             ],
         ),
         404: OpenApiResponse(
-            description="مخاطب آزاد یا پروژه پیدا نشد.",
+            description="No available contact or project not found.",
             examples=[
                 OpenApiExample(
                     "No Contacts",
-                    value={"detail": "هیچ مخاطب آزاد برای تخصیص وجود ندارد."}
+                    value={"detail": "No free contact available for assignment."}
                 )
             ],
         ),
@@ -141,23 +146,24 @@ request_new_contact_schema = extend_schema(
             name="Authorization",
             location=OpenApiParameter.HEADER,
             required=True,
-            description="توکن دسترسی Bearer برای احراز هویت.",
+            description="Bearer access token for authentication.",
             type=str,
         ),
     ],
 )
 
+# Release a contact
 release_contact_schema = extend_schema(
     tags=['Contacts', 'Release'],
-    summary="آزاد کردن مخاطب",
+    summary="Release a contact",
     description=(
-        "این عملیات برای آزاد کردن یک مخاطب تخصیص داده‌شده توسط تماس‌گیرنده یا ادمین است. "
-        "مخاطب پس از آزاد شدن، به لیست عمومی مخاطبین بازمی‌گردد."
+        "This operation releases a previously assigned contact. "
+        "The contact becomes available again for other users."
     ),
     parameters=[
         OpenApiParameter(
             name="contact_id",
-            description="شناسه مخاطب که باید آزاد شود",
+            description="ID of the contact to be released.",
             required=True,
             type=OpenApiTypes.INT,
             location=OpenApiParameter.PATH,
@@ -165,29 +171,29 @@ release_contact_schema = extend_schema(
     ],
     responses={
         200: OpenApiResponse(
-            description="مخاطب با موفقیت آزاد شد و به لیست عمومی بازگشت.",
+            description="The contact was successfully released.",
             examples=[
                 OpenApiExample(
                     "Success",
-                    value={"detail": "مخاطب با موفقیت آزاد شد و به لیست عمومی بازگشت."}
+                    value={"detail": "The contact has been successfully released."}
                 )
             ],
         ),
         403: OpenApiResponse(
-            description="دسترسی غیرمجاز. کاربر اجازه آزاد کردن این مخاطب را ندارد.",
+            description="Unauthorized. The user is not allowed to release this contact.",
             examples=[
                 OpenApiExample(
                     "Forbidden",
-                    value={"detail": "شما اجازه آزاد کردن این مخاطب را ندارید."}
+                    value={"detail": "You are not allowed to release this contact."}
                 )
             ],
         ),
         404: OpenApiResponse(
-            description="مخاطب یافت نشد.",
+            description="The specified contact was not found.",
             examples=[
                 OpenApiExample(
                     "Not Found",
-                    value={"detail": "مخاطب مورد نظر یافت نشد."}
+                    value={"detail": "The contact was not found."}
                 )
             ],
         ),

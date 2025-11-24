@@ -2,7 +2,9 @@ from django.contrib.auth import get_user_model
 from django.db import models
 
 from projects.models import Project
+
 User = get_user_model()
+
 
 class Contact(models.Model):
     CALL_STATUS_CHOICES = [
@@ -58,6 +60,7 @@ class Contact(models.Model):
 
     def get_last_call(self):
         return self.calls.order_by("-call_date").first()
+
 
 class ContactLog(models.Model):
     action = models.CharField(verbose_name="اقدام", max_length=255)

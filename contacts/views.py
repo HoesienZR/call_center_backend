@@ -1,21 +1,17 @@
 import logging
-from django.db import transaction
-from django.db.models import Q, Count
-from drf_spectacular.utils import extend_schema
-from rest_framework import status
-from rest_framework.decorators import action, permission_classes
-from rest_framework.permissions import IsAdminUser, IsAuthenticated
-from rest_framework.response import Response
-from rest_framework import viewsets
-from rest_framework.views import APIView
 
 from django.contrib.auth import get_user_model
-from core.utils import validate_phone_number, normalize_phone_number
-from .utils import assign_available_contact
+from django.db.models import Q, Count
+from rest_framework import status
+from rest_framework import viewsets
+from rest_framework.decorators import action
+from rest_framework.permissions import IsAdminUser, IsAuthenticated
+from rest_framework.response import Response
+from rest_framework.views import APIView
+
 from projects.models import ProjectMembership
 from .models import Project, Contact
 from .permission import IsProjectCaller, IsProjectAdmin, ReleaseContactPermission
-from .serializers import ContactSerializer, ContactStatsSerializer
 from .schema import (
     filter_contact_by_status_and_project_schema,
     release_contact_schema,
@@ -24,6 +20,8 @@ from .schema import (
     filter_contact_by_status_schema,
     request_new_contact_schema,
 )
+from .serializers import ContactSerializer, ContactStatsSerializer
+from .utils import assign_available_contact
 
 logger = logging.getLogger(__name__)
 
@@ -274,6 +272,7 @@ class RequestNewContactView(APIView):
         project = get_object_or_404(Project, id=project_id)
 
         if assign_available_contact(project, request.user):
-            return Response({"detail": "A new contact has been successfully assigned to you."}, status=status.HTTP_200_OK)
+            return Response({"detail": "A new contact has been successfully assigned to you."},
+                            status=status.HTTP_200_OK)
 
         return Response({"detail": "No available contacts to assign at the moment."}, status=status.HTTP_404_NOT_FOUND)

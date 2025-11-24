@@ -1,9 +1,10 @@
+from django.db.models import Count, Q
+from persiantools.jdatetime import JalaliDate
 from rest_framework import serializers
-from .models import Contact
+
 from calls.models import Call
 from users.models import CustomUser
-from persiantools.jdatetime import JalaliDate
-from django.db.models import Count, Q
+from .models import Contact
 
 
 class ContactSerializer(serializers.ModelSerializer):
@@ -19,17 +20,19 @@ class ContactSerializer(serializers.ModelSerializer):
     class Meta:
         model = Contact
         fields = (
-            'id', 'project_id', 'full_name', 'phone', 'email', 'address', 'assigned_caller_id', 'assigned_caller',
-            'assigned_caller_phone', 'call_status', 'call_notes', 'custom_fields', 'is_active', 'created_at',
-            'updated_at', 'created_by', "contact_calls_count",
+            'id', 'project_id', 'full_name', 'phone', 'email', 'address',
+            'assigned_caller_id', 'assigned_caller', 'assigned_caller_phone',
+            'call_status', 'call_notes', 'custom_fields', 'is_active',
+            'created_at', 'updated_at', 'created_by', "contact_calls_count",
             'contacts_calls_answered_count', 'contacts_calls_not_answered_count',
-            'contacts_calls_rate', "is_special", "gender", "birth_date", 'persian_created_by', 'persian_updated_at'
+            'contacts_calls_rate', "is_special", "gender", "birth_date",
+            'persian_created_by', 'persian_updated_at'
         )
         read_only_fields = ('created_at', 'updated_at', 'created_by')
 
     def get_queryset(self):
         """
-        بهینه‌سازی کوئری‌ها با استفاده از annotate برای محاسبات تماس‌ها
+        Optimize queryset using annotate for call-related metrics.
         """
         queryset = super().get_queryset()
         queryset = queryset.annotate(
@@ -41,33 +44,40 @@ class ContactSerializer(serializers.ModelSerializer):
         return queryset
 
     def get_call_notes(self, obj):
-        """یادداشت‌های تماس"""
-        calls = Call.objects.filter(contact=obj, notes__isnull=False).exclude(notes='').order_by('-call_date')
+        """Return notes for calls belonging to the contact."""
+        calls = Call.objects.filter(
+            contact=obj,
+            notes__isnull=False
+        ).exclude(notes='').order_by('-call_date')
+
         return [
             {
-                'caller_name': call.caller.get_full_name() if call.caller else 'ناشناس',
+                'caller_name': call.caller.get_full_name() if call.caller else 'Unknown',
                 'note': call.notes,
                 'created_at': str(JalaliDate(call.created_at.date())),
-                'call_result': call.get_call_result_display() if hasattr(call, 'get_call_result_display') else call.call_result
+                'call_result': (
+                    call.get_call_result_display()
+                    if hasattr(call, 'get_call_result_display')
+                    else call.call_result
+                )
             }
             for call in calls
         ]
 
     def get_persian_updated_at(self, obj):
-        """تبدیل تاریخ به فرمت جلالی"""
+        """Return updated_at date in Jalali format."""
         return str(JalaliDate(obj.updated_at.date()))
 
     def get_persian_created_by(self, obj):
-        """تبدیل تاریخ به فرمت جلالی برای created_by"""
+        """Return created_at date in Jalali format."""
         return str(JalaliDate(obj.created_at.date()))
 
     def create(self, validated_data):
-        """ایجاد مخاطب جدید"""
+        """Create a new contact."""
         user = self.context['request'].user
-        project = validated_data.get('project')
         validated_data['created_by'] = user
 
-        # تخصیص تماس‌گیرنده
+        # Assign caller if phone number provided
         caller_phone_number = validated_data.pop('caller_phone_number', None)
         if caller_phone_number and 'assigned_caller' not in validated_data:
             try:
@@ -79,7 +89,7 @@ class ContactSerializer(serializers.ModelSerializer):
         return super().create(validated_data)
 
     def update(self, instance, validated_data):
-        """به‌روزرسانی مخاطب"""
+        """Update an existing contact."""
         caller_phone_number = validated_data.pop('caller_phone_number', None)
         if caller_phone_number:
             try:
@@ -89,6 +99,8 @@ class ContactSerializer(serializers.ModelSerializer):
                 pass
 
         return super().update(instance, validated_data)
+
+
 class ContactStatsSerializer(serializers.ModelSerializer):
     project_name = serializers.CharField(source='project.name', read_only=True)
     project_id = serializers.IntegerField(source='project.id', read_only=True)
@@ -109,7 +121,7 @@ class ContactStatsSerializer(serializers.ModelSerializer):
 
     def get_queryset(self):
         """
-        بهینه‌سازی کوئری‌ها با استفاده از annotate برای محاسبات تماس‌ها
+        Optimize queryset with annotate for call statistics.
         """
         queryset = super().get_queryset()
         queryset = queryset.annotate(
