@@ -10,7 +10,7 @@ from core.permissions import IsProjectAdmin
 from projects.models import Project, ProjectMembership
 from .models import SavedSearch, UploadedFile
 from .serializers import (
-    SavedSearchSerializer, UploadedFileSerializer, QuestionSerializer, AnswerChoiceSerializer
+    SavedSearchSerializer, UploadedFileSerializer
 )
 
 logger = logging.getLogger(__name__)
@@ -83,47 +83,3 @@ class UploadedFileViewSet(viewsets.ReadOnlyModelViewSet):
         return Response({"message": "فایل با موفقیت پردازش شد."})  # پیام موفقیت‌آمیز
 
 
-class QuestionViewSet(viewsets.ModelViewSet):
-    """
-    ViewSet for managing questions associated with a project.
-    """
-    serializer_class = QuestionSerializer
-    permission_classes = [IsAuthenticated, IsProjectAdmin | IsAdminUser]  # Customize, e.g., add IsProjectAdmin
-
-    def get_queryset(self):
-        """
-        Retrieve questions for the specific project from the URL.
-        """
-        project_id = self.kwargs['project_pk']
-        return Question.objects.filter(project_id=project_id).prefetch_related(
-            Prefetch('choices', queryset=AnswerChoice.objects.all())
-        )
-
-    def perform_create(self, serializer):
-        """
-        Automatically link the created question to the project.
-        """
-        project_id = self.kwargs['project_pk']
-        serializer.save(project_id=project_id)
-
-
-class AnswerChoiceViewSet(viewsets.ModelViewSet):
-    """
-    ViewSet for managing answer choices associated with a question.
-    """
-    serializer_class = AnswerChoiceSerializer  # Writable serializer
-    permission_classes = [IsAuthenticated, IsProjectAdmin | IsAdminUser]
-
-    def get_queryset(self):
-        """
-        Retrieve answer choices for the specific question from the URL.
-        """
-        question_id = self.kwargs['question_pk']
-        return AnswerChoice.objects.filter(question_id=question_id)
-
-    def perform_create(self, serializer):
-        """
-        Automatically link the created answer choice to the question.
-        """
-        question_id = self.kwargs['question_pk']
-        serializer.save(question_id=question_id)

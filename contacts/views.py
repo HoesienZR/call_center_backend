@@ -25,7 +25,6 @@ from .schema import (
     request_new_contact_schema,
 )
 
-# تنظیم logger
 logger = logging.getLogger(__name__)
 
 User = get_user_model()
@@ -53,7 +52,6 @@ class ContactViewSet(viewsets.ModelViewSet):
         user = self.request.user
         base_qs = Contact.objects.select_related("project", "assigned_caller").prefetch_related("calls")
 
-        # Superusers can access all contacts
         if user.is_superuser:
             qs = base_qs
         else:
@@ -64,7 +62,6 @@ class ContactViewSet(viewsets.ModelViewSet):
             else:
                 qs = base_qs.filter(assigned_caller=user)
 
-        # Annotate the contacts with call stats
         qs = qs.annotate(
             total_calls=Count('calls', distinct=True),
             answered_calls=Count('calls', filter=Q(calls__status='answered'), distinct=True),

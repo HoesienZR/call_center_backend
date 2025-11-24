@@ -7,7 +7,6 @@ from django.db.models import Count, Q
 
 
 class ContactSerializer(serializers.ModelSerializer):
-    # فیلدهای اضافی برای نمایش بهتر در فرانت‌اند
     assigned_caller_phone = serializers.CharField(source='assigned_caller.phone', read_only=True)
     call_notes = serializers.SerializerMethodField(read_only=True)
     contact_calls_count = serializers.IntegerField(read_only=True)

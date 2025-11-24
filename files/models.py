@@ -64,29 +64,4 @@ class UploadedFile(models.Model):
 
 
 
-class Question(models.Model):
-    """مدل برای سوالات مرتبط با پروژه"""
-    project = models.ForeignKey(Project, on_delete=models.CASCADE, related_name='questions', verbose_name="پروژه")
-    text = models.CharField(max_length=200, verbose_name="متن سوال")
-
-    class Meta:
-        verbose_name = "سوال"
-        verbose_name_plural = "سوالات"
-
-
-    def __str__(self):
-        return self.text
-
-
-class AnswerChoice(models.Model):
-    """مدل برای گزینه‌های پاسخ هر سوال"""
-    question = models.ForeignKey(Question, on_delete=models.CASCADE, related_name='choices', verbose_name="سوال")
-    text = models.CharField(max_length=100, verbose_name="متن گزینه")
-
-    class Meta:
-        verbose_name = "گزینه پاسخ"
-        verbose_name_plural = "گزینه‌های پاسخ"
-
-    def __str__(self):
-        return self.text
 

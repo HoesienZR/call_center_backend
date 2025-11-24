@@ -1,11 +1,25 @@
 from django.contrib.auth import get_user_model
-from rest_framework import serializers
-from .models import Project, ProjectMembership
-from users.serializers import CustomUserSerializer
 from persiantools.jdatetime import JalaliDate
-from files.serializers import AnswerChoiceSerializer
+from rest_framework import serializers
+
+from users.serializers import CustomUserSerializer
+from .models import Project, ProjectMembership, Question, AnswerChoice
 
 User = get_user_model()
+
+
+class AnswerChoiceSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = AnswerChoice
+        fields = ['id', 'text']
+
+
+class QuestionSerializer(serializers.ModelSerializer):
+    choices = AnswerChoiceSerializer(many=True, read_only=True)
+
+    class Meta:
+        model = Question
+        fields = ['id', 'text', 'choices']
 
 class ProjectMembershipSerializer(serializers.ModelSerializer):
     user = CustomUserSerializer(read_only=True)
@@ -20,6 +34,7 @@ class ProjectMembershipSerializer(serializers.ModelSerializer):
         model = ProjectMembership
         fields = ('id', 'project_id', 'user', 'user_id', 'role', 'assigned_at')
         read_only_fields = ('assigned_at',)
+
 
 class ProjectSerializer(serializers.ModelSerializer):
     call_answers_summary = AnswerChoiceSerializer(many=True, read_only=True)
@@ -55,3 +70,6 @@ class ProjectSerializer(serializers.ModelSerializer):
     def _get_persian_date(self, date_obj):
         """کمک به تبدیل تاریخ به فرمت جلالی"""
         return str(JalaliDate(date_obj.date())) if date_obj else None
+
+
+

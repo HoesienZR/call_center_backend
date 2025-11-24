@@ -1,5 +1,5 @@
 from django.contrib import admin
-from .models import ProjectMembership, Project
+from .models import ProjectMembership, Project, Question, AnswerChoice
 
 # Register your models here.
 
@@ -37,3 +37,13 @@ class ProjectMembershipAdmin(admin.ModelAdmin):
     list_filter = ('role', 'project')  # فیلتر بر اساس نقش و پروژه
     search_fields = ('project__name', 'user__username')  # جستجو بر اساس نام پروژه و نام کاربری
     autocomplete_fields = ['project', 'user']  # برای جستجوی سریع پروژه و کاربر
+
+
+@admin.register(AnswerChoice)
+class AnswerChoiceAdmin(admin.ModelAdmin):
+    list_display = ['question', "text"]
+
+
+@admin.register(Question)
+class QuestionAdmin(admin.ModelAdmin):
+    list_display = ["text"]

@@ -1,28 +1,18 @@
 import logging
 import traceback
+
 from django.db import transaction
 from django.db.models import Prefetch
-from django.http import HttpResponse
 from rest_framework import viewsets, status
-from rest_framework.views import APIView
-from rest_framework.viewsets import mixins, generics
 from rest_framework.decorators import action, api_view
 from rest_framework.exceptions import PermissionDenied
 from rest_framework.generics import get_object_or_404
 from rest_framework.permissions import IsAuthenticated, IsAdminUser
 from rest_framework.response import Response
-from core.utils import generate_username
+from rest_framework.views import APIView
+from rest_framework.viewsets import mixins, generics
+
 from core.permissions import IsReadOnlyOrProjectAdmin, IsProjectAdmin
-from contacts.models import Contact
-from files.models import Question, UploadedFile
-from .serializers import *
-from .utils import (
-    clean_string_field,
-    import_caller_from_excel,
-    check_if_user_exist,
-    check_if_project_membership_exist,
-    toggle_user_project_membership_role
-)
 from .schema import (
     project_list_schema,
     project_create_schema,
@@ -32,8 +22,17 @@ from .schema import (
     caller_import_schema,
     toggle_user_role_schema,
 )
+from .models import AnswerChoice, Project, ProjectMembership, Question
+from .serializers import QuestionSerializer, AnswerChoiceSerializer, ProjectSerializer, ProjectMembershipSerializer
+from .utils import (
+    import_caller_from_excel,
+    check_if_user_exist,
+    check_if_project_membership_exist,
+    toggle_user_project_membership_role
+)
 
 logger = logging.getLogger(__name__)
+
 
 class ProjectViewSet(viewsets.ModelViewSet):
     queryset = Project.objects.all()
@@ -106,6 +105,7 @@ class ProjectViewSet(viewsets.ModelViewSet):
         """کمک به ارسال پاسخ خطا"""
         return Response({'error': message}, status=status)
 
+
 class ProjectMembershipApiListView(mixins.ListModelMixin, generics.GenericAPIView):
     queryset = ProjectMembership.objects.select_related("project", "user")
     serializer_class = ProjectMembershipSerializer
@@ -119,6 +119,7 @@ class ProjectMembershipApiListView(mixins.ListModelMixin, generics.GenericAPIVie
         if project_id:
             return self.queryset.filter(project_id=project_id)
         return self.queryset
+
 
 class CallerImportView(APIView):
     permission_classes = [IsAuthenticated, IsAdminUser]
@@ -154,6 +155,7 @@ class CallerImportView(APIView):
         """کمک به ارسال پاسخ خطا"""
         return Response({"error": message}, status=status)
 
+
 @toggle_user_role_schema
 @api_view(["GET", ])
 def toggle_user_role(request):
@@ -161,7 +163,8 @@ def toggle_user_role(request):
         project = check_if_user_exist(request.data.get('project_id'))
         user = check_if_user_exist(request.data.get('user_id'))
         project_membership = check_if_project_membership_exist(project=project, user=user)
-        old_role, new_role = toggle_user_project_membership_role(project=project, user=user, project_membership=project_membership)
+        old_role, new_role = toggle_user_project_membership_role(project=project, user=user,
+                                                                 project_membership=project_membership)
     except Exception as e:
         traceback.print_exc()
         return Response({"error": f"خطا در فرآیند: {str(e)}"}, status=status.HTTP_400_BAD_REQUEST)
@@ -176,3 +179,49 @@ def toggle_user_role(request):
         'new_role_display': project_membership.get_role_display()
     }
     return Response(response_data, status=status.HTTP_200_OK)
+
+
+class QuestionViewSet(viewsets.ModelViewSet):
+    """
+    ViewSet for managing questions associated with a project.
+    """
+    serializer_class = QuestionSerializer
+    permission_classes = [IsAuthenticated, IsProjectAdmin | IsAdminUser]
+
+    def get_queryset(self):
+        """
+        Retrieve questions for the specific project from the URL.
+        """
+        project_id = self.kwargs['project_pk']
+        return Question.objects.filter(project_id=project_id).prefetch_related(
+            Prefetch('choices', queryset=AnswerChoice.objects.all())
+        )
+
+    def perform_create(self, serializer):
+        """
+        Automatically link the created question to the project.
+        """
+        project_id = self.kwargs['project_pk']
+        serializer.save(project_id=project_id)
+
+
+class AnswerChoiceViewSet(viewsets.ModelViewSet):
+    """
+    ViewSet for managing answer choices associated with a question.
+    """
+    serializer_class = AnswerChoiceSerializer
+    permission_classes = [IsAuthenticated, IsProjectAdmin | IsAdminUser]
+
+    def get_queryset(self):
+        """
+        Retrieve answer choices for the specific question from the URL.
+        """
+        question_id = self.kwargs['question_pk']
+        return AnswerChoice.objects.filter(question_id=question_id)
+
+    def perform_create(self, serializer):
+        """
+        Automatically link the created answer choice to the question.
+        """
+        question_id = self.kwargs['question_pk']
+        serializer.save(question_id=question_id)

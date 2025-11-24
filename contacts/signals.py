@@ -15,7 +15,6 @@ def update_contact_status_on_callback_request(sender, instance, created, **kwarg
         contact.call_status = 'pending'
         contact.save(update_fields=['call_status'])
 
-        # اختیاری: ثبت لاگ برای این تغییر
         from .models import ContactLog
         ContactLog.objects.create(
             contact=contact,

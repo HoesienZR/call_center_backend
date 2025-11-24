@@ -1,21 +1,8 @@
 from django.contrib.auth import get_user_model
 from rest_framework import serializers
 
-from .models import Question, AnswerChoice, UploadedFile, SavedSearch
+from .models import  UploadedFile, SavedSearch
 
-
-class AnswerChoiceSerializer(serializers.ModelSerializer):
-    class Meta:
-        model = AnswerChoice
-        fields = ['id', 'text']
-
-
-class QuestionSerializer(serializers.ModelSerializer):
-    choices = AnswerChoiceSerializer(many=True, read_only=True)
-
-    class Meta:
-        model = Question
-        fields = ['id', 'text', 'choices']
 
 
 # TODO maybe and this also be useless too

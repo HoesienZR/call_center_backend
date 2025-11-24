@@ -21,7 +21,6 @@ class Call(models.Model):
         ('pending', "در انتظار")
     ]
 
-    # فیلدها
     contact = models.ForeignKey(Contact, on_delete=models.CASCADE, related_name='calls', verbose_name="مخاطب")
     caller = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='calls',
                                verbose_name="تماس‌گیرنده")
@@ -43,12 +42,10 @@ class Call(models.Model):
                                   related_name='edited_calls', verbose_name="ویرایش شده توسط")
     edit_reason = models.TextField(blank=True, verbose_name="دلیل ویرایش")
 
-    # استفاده از JSONField به جای TextField برای داده‌های اصلی
     original_data = models.JSONField(blank=True, verbose_name="داده‌های اصلی")
 
     created_at = models.DateTimeField(auto_now_add=True, verbose_name="تاریخ ایجاد")
 
-    # بهینه‌سازی متد can_edit
     def can_edit(self, user):
         if not self.is_editable:
             return False
@@ -62,7 +59,6 @@ class Call(models.Model):
             return False
         return False
 
-    # متدهای متفرقه
     def save_original_data_if_first_edit(self):
         """ذخیره داده‌های اصلی در صورت اولین ویرایش"""
         if not self.original_data:

@@ -6,7 +6,7 @@ from .models import Call, CallAnswer, CallEditHistory
 class CallAnswerAdmin(admin.ModelAdmin):
     list_display = ['call', 'question', 'selected_choice']
     search_fields = ['call__contact__full_name', 'question__text', 'selected_choice__text']
-    list_filter = ('call__project', 'selected_choice')  # فیلتر کردن بر اساس پروژه و انتخاب‌ها
+    list_filter = ('call__project', 'selected_choice')
 
 # ثبت مدل Call
 @admin.register(Call)
@@ -23,6 +23,6 @@ class CallAdmin(admin.ModelAdmin):
 @admin.register(CallEditHistory)
 class CallEditHistoryAdmin(admin.ModelAdmin):
     list_display = ('call', 'edited_by', 'edit_date', 'field_name')
-    readonly_fields = [field.name for field in CallEditHistory._meta.fields]  # همه فیلدها فقط خواندنی
-    search_fields = ['call__contact__full_name', 'field_name', 'old_value', 'new_value']  # جستجو بر اساس فیلدهای مرتبط
-    ordering = ('-edit_date',)  # مرتب‌سازی پیش‌فرض بر اساس تاریخ ویرایش
+    readonly_fields = [field.name for field in CallEditHistory._meta.fields]
+    search_fields = ['call__contact__full_name', 'field_name', 'old_value', 'new_value']
+    ordering = ('-edit_date',)
