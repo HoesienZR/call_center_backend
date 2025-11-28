@@ -21,6 +21,7 @@ class QuestionSerializer(serializers.ModelSerializer):
         model = Question
         fields = ['id', 'text', 'choices']
 
+
 class ProjectMembershipSerializer(serializers.ModelSerializer):
     user = CustomUserSerializer(read_only=True)
     user_id = serializers.PrimaryKeyRelatedField(
@@ -56,20 +57,17 @@ class ProjectSerializer(serializers.ModelSerializer):
         read_only_fields = ('created_at', 'updated_at',)
 
     def get_project_statistics(self, obj):
-        """دریافت آمار پروژه"""
+        """Retrieve project statistics."""
         return obj.get_statistics() if hasattr(obj, 'get_statistics') else {}
 
     def get_persian_updated_at(self, obj):
-        """تبدیل تاریخ به فرمت جلالی"""
+        """Convert updated_at to Jalali date format."""
         return self._get_persian_date(obj.updated_at)
 
     def get_persian_created_at(self, obj):
-        """تبدیل تاریخ به فرمت جلالی"""
+        """Convert created_at to Jalali date format."""
         return self._get_persian_date(obj.created_at)
 
     def _get_persian_date(self, date_obj):
-        """کمک به تبدیل تاریخ به فرمت جلالی"""
+        """Helper for converting datetime to Jalali date."""
         return str(JalaliDate(date_obj.date())) if date_obj else None
-
-
-

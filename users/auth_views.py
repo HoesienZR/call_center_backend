@@ -14,12 +14,14 @@ from .services import otp_service
 
 class CustomAuthToken(ObtainAuthToken):
     """
-    کلاس سفارشی برای دریافت توکن احراز هویت
+    Custom class to obtain authentication token.
     """
 
     def post(self, request, *args, **kwargs):
-        serializer = self.serializer_class(data=request.data,
-                                           context={'request': request})
+        serializer = self.serializer_class(
+            data=request.data,
+            context={'request': request}
+        )
         serializer.is_valid(raise_exception=True)
         user = serializer.validated_data['user']
         token, created = Token.objects.get_or_create(user=user)
@@ -40,16 +42,16 @@ class CustomAuthToken(ObtainAuthToken):
 @permission_classes([AllowAny])
 def login(request):
     """
-    ورود کاربر و دریافت توکن
+    User login and obtain authentication token.
     """
     phone = request.data.get('phone')
     password = request.data.get('password')
     if phone is None or password is None:
         return Response({
-            'error': 'شماره تماس و رمز عبور الزامی است'
+            'error': 'Phone number and password are required'
         }, status=status.HTTP_400_BAD_REQUEST)
 
-    # Try to find user by email
+    # Try to find user by phone number
     try:
         user_obj = User.objects.get(phone_number=phone)
         user = authenticate(username=user_obj.username, password=password)
@@ -57,14 +59,13 @@ def login(request):
         user = None
 
     if not user:
-        print('errorایمیل یا رمز عبور اشتباه است')
         return Response({
-            'error': 'شماره تلفن  یا رمز عبور اشتباه است'
+            'error': 'Phone number or password is incorrect'
         }, status=status.HTTP_401_UNAUTHORIZED)
 
     if not user.is_active:
         return Response({
-            'error': 'حساب کاربری غیرفعال است'
+            'error': 'User account is inactive'
         }, status=status.HTTP_401_UNAUTHORIZED)
 
     token, created = Token.objects.get_or_create(user=user)
@@ -85,16 +86,16 @@ def login(request):
 @api_view(['POST'])
 def logout(request):
     """
-    خروج کاربر و حذف توکن
+    User logout and token deletion.
     """
     try:
         request.user.auth_token.delete()
         return Response({
-            'message': 'با موفقیت خارج شدید'
+            'message': 'Successfully logged out'
         }, status=status.HTTP_200_OK)
     except (AttributeError, Token.DoesNotExist):
         return Response({
-            'error': 'توکن معتبری یافت نشد'
+            'error': 'Valid token not found'
         }, status=status.HTTP_400_BAD_REQUEST)
 
 
@@ -102,7 +103,7 @@ def logout(request):
 @api_view(['GET'])
 def user_profile(request):
     """
-    دریافت اطلاعات پروفایل کاربر
+    Retrieve the profile information of the logged-in user.
     """
     serializer = CustomUserSerializer(request.user)
     return Response(serializer.data)
@@ -113,41 +114,36 @@ def user_profile(request):
 @permission_classes([AllowAny])
 def register(request):
     """
-    ثبت نام کاربر جدید با ایجاد پروفایل و شماره تلفن
+    Register a new user with profile and phone number.
     """
-
     username = request.data.get('username')
     password = request.data.get('password')
     email = request.data.get('email', '')
     first_name = request.data.get('first_name', '')
     last_name = request.data.get('last_name', '')
-    phone_number = request.data.get('phone_number', '')  # دریافت شماره تلفن
+    phone_number = request.data.get('phone_number', '')
 
     if not username or not password:
         return Response({
-            'error': 'نام کاربری و رمز عبور الزامی است'
+            'error': 'Username and password are required'
         }, status=status.HTTP_400_BAD_REQUEST)
 
-    # بررسی اجباری بودن شماره تلفن
     if not phone_number:
         return Response({
-            'error': 'شماره تلفن الزامی است'
+            'error': 'Phone number is required'
         }, status=status.HTTP_400_BAD_REQUEST)
 
     if User.objects.filter(username=username).exists():
         return Response({
-            'error': 'نام کاربری قبلاً استفاده شده است'
+            'error': 'Username is already taken'
         }, status=status.HTTP_400_BAD_REQUEST)
 
-    # بررسی تکراری نبودن شماره تلفن (اختیاری)
     if User.objects.filter(phone_number=phone_number).exists():
         return Response({
-            'error': 'شماره تلفن قبلاً استفاده شده است'
+            'error': 'Phone number is already in use'
         }, status=status.HTTP_400_BAD_REQUEST)
 
     try:
-        # ایجاد کاربر
-
         user = User.objects.create_user(
             username=username,
             password=password,
@@ -155,12 +151,11 @@ def register(request):
             first_name=first_name,
             last_name=last_name,
             phone_number=phone_number
-
         )
         token, created = Token.objects.get_or_create(user=user)
 
         return Response({
-            'message': 'کاربر با موفقیت ایجاد شد',
+            'message': 'User successfully created',
             'token': token.key,
             'user_id': user.pk,
             'username': user.username,
@@ -168,12 +163,10 @@ def register(request):
         }, status=status.HTTP_201_CREATED)
 
     except Exception as e:
-        # در صورت بروز خطا، کاربر ایجاد شده را حذف کنیم
         if 'user' in locals():
             user.delete()
-
         return Response({
-            'error': f'خطا در ایجاد کاربر: {str(e)}'
+            'error': f'Error creating user: {str(e)}'
         }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
@@ -181,39 +174,45 @@ def register(request):
 @api_view(['POST'])
 @permission_classes([AllowAny])
 def request_otp(request):
+    """
+    Request an OTP code to be sent to the user's phone.
+    """
     phone = request.data.get('phone')
     if not phone:
-        return Response({"error": "شماره تلفن الزامی است"}, status=status.HTTP_400_BAD_REQUEST)
+        return Response({"error": "Phone number is required"}, status=status.HTTP_400_BAD_REQUEST)
 
     if not User.objects.filter(phone_number=phone).exists():
-        return Response({"error": "کاربری با این شماره یافت نشد"}, status=status.HTTP_404_NOT_FOUND)
+        return Response({"error": "No user found with this phone number"}, status=status.HTTP_404_NOT_FOUND)
 
     if not otp_service.can_request_otp(request, phone):
-        return Response({"error": "کد قبلی هنوز معتبر است. بعداً تلاش کنید."}, status=status.HTTP_429_TOO_MANY_REQUESTS)
+        return Response({"error": "Previous code still valid. Try later."}, status=status.HTTP_429_TOO_MANY_REQUESTS)
 
     otp_code = otp_service.generate_otp()
     otp_service.store_otp(request, phone, otp_code)
 
-    # اگر SMS واقعی داری:
+    # If you have real SMS service
     if otp_service.send_sms(phone, otp_code):
-        return Response({"message": "کد OTP ارسال شد"}, status=status.HTTP_200_OK)
+        return Response({"message": "OTP code sent"}, status=status.HTTP_200_OK)
 
-    return Response({"message": "کد OTP (تست): " + otp_code}, status=status.HTTP_200_OK)
+    return Response({"message": "OTP code (test): " + otp_code}, status=status.HTTP_200_OK)
 
 
 @auth_schema.verify_otp_post_schema
 @api_view(['POST'])
 @permission_classes([AllowAny])
 def verify_otp(request):
+    """
+    Verify the OTP code sent to the user's phone.
+    """
     phone = request.data.get('phone')
     otp_code = request.data.get('otp')
 
     if not phone or not otp_code:
-        return Response({"error": "شماره تلفن و OTP الزامی است"}, status=status.HTTP_400_BAD_REQUEST)
+        return Response({"error": "Phone number and OTP are required"}, status=status.HTTP_400_BAD_REQUEST)
 
     cached_otp = otp_service.get_cached_otp(request, phone)
     if not cached_otp or cached_otp != otp_code:
-        return Response({"error": "OTP نامعتبر یا منقضی شده"}, status=status.HTTP_400_BAD_REQUEST)
+        return Response({"error": "Invalid or expired OTP"}, status=status.HTTP_400_BAD_REQUEST)
 
     try:
         user = User.objects.get(phone_number=phone)
@@ -228,4 +227,4 @@ def verify_otp(request):
         }, status=status.HTTP_200_OK)
 
     except User.DoesNotExist:
-        return Response({"error": "کاربر یافت نشد"}, status=status.HTTP_404_NOT_FOUND)
+        return Response({"error": "User not found"}, status=status.HTTP_404_NOT_FOUND)

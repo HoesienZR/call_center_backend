@@ -1,15 +1,15 @@
 import requests
 import json
 
-# تنظیمات
+# Settings
 BASE_URL = "https://8000-iv9nvny36bk7nz25ctdns-e56203cc.manusvm.computer/api"
 ADMIN_USERNAME = "admin"
 ADMIN_PASSWORD = "admin123"
 
 
 def test_login():
-    """تست ورود کاربر"""
-    print("=== تست ورود کاربر ===")
+    """Test user login"""
+    print("=== Testing user login ===")
 
     login_data = {
         "username": ADMIN_USERNAME,
@@ -24,10 +24,10 @@ def test_login():
 
         if response.status_code == 200:
             token = response.json().get('token')
-            print(f"Token دریافت شد: {token}")
+            print(f"Token received: {token}")
             return token
         else:
-            print("خطا در ورود")
+            print("Login failed")
             return None
 
     except requests.exceptions.RequestException as e:
@@ -36,8 +36,8 @@ def test_login():
 
 
 def test_api_with_token(token):
-    """تست دسترسی به API با توکن"""
-    print("\n=== تست دسترسی به API با توکن ===")
+    """Test API access with token"""
+    print("\n=== Testing API access with token ===")
 
     headers = {
         "Authorization": f"Token {token}",
@@ -45,40 +45,40 @@ def test_api_with_token(token):
     }
 
     try:
-        # تست دریافت لیست پروژه‌ها
+        # Test retrieving the list of projects
         response = requests.get(f"{BASE_URL}/projects/", headers=headers)
         print(f"GET /projects/ - Status Code: {response.status_code}")
 
         if response.status_code == 200:
-            print("دسترسی به API موفقیت‌آمیز بود")
-            print(f"تعداد پروژه‌ها: {len(response.json().get('results', []))}")
+            print("API access successful")
+            print(f"Number of projects: {len(response.json().get('results', []))}")
         else:
-            print(f"خطا در دسترسی به API: {response.text}")
+            print(f"API access error: {response.text}")
 
     except requests.exceptions.RequestException as e:
         print(f"Error during request: {e}")
 
 
 def test_api_without_token():
-    """تست دسترسی به API بدون توکن"""
-    print("\n=== تست دسترسی به API بدون توکن ===")
+    """Test API access without token"""
+    print("\n=== Testing API access without token ===")
 
     try:
         response = requests.get(f"{BASE_URL}/projects/")
-        print(f"GET /projects/ بدون توکن - Status Code: {response.status_code}")
+        print(f"GET /projects/ without token - Status Code: {response.status_code}")
 
-        if response.status_code == 401 or response.status_code == 403:
-            print("به درستی دسترسی رد شد (انتظار می‌رفت)")
+        if response.status_code in (401, 403):
+            print("Access correctly denied (expected)")
         else:
-            print("مشکل: دسترسی بدون توکن امکان‌پذیر است!")
+            print("Problem: Access without token is possible!")
 
     except requests.exceptions.RequestException as e:
         print(f"Error during request: {e}")
 
 
 def test_user_profile(token):
-    """تست دریافت پروفایل کاربر"""
-    print("\n=== تست دریافت پروفایل کاربر ===")
+    """Test retrieving user profile"""
+    print("\n=== Testing user profile retrieval ===")
 
     headers = {
         "Authorization": f"Token {token}",
@@ -90,34 +90,34 @@ def test_user_profile(token):
         print(f"GET /auth/profile/ - Status Code: {response.status_code}")
 
         if response.status_code == 200:
-            print(f"پروفایل کاربر: {response.json()}")
+            print(f"User profile: {response.json()}")
         else:
-            print(f"خطا در دریافت پروفایل: {response.text}")
+            print(f"Error retrieving profile: {response.text}")
 
     except requests.exceptions.RequestException as e:
         print(f"Error during request: {e}")
 
 
 def main():
-    """تابع اصلی تست"""
-    print("شروع تست سیستم احراز هویت Token Authentication")
+    """Main test function"""
+    print("Starting Token Authentication system tests")
     print("=" * 50)
 
-    # تست ورود
+    # Test login
     token = test_login()
 
     if token:
-        # تست دسترسی با توکن
+        # Test API access with token
         test_api_with_token(token)
 
-        # تست پروفایل کاربر
+        # Test user profile
         test_user_profile(token)
 
-    # تست دسترسی بدون توکن
+    # Test access without token
     test_api_without_token()
 
     print("\n" + "=" * 50)
-    print("تست‌ها تمام شد")
+    print("All tests completed")
 
 
 if __name__ == "__main__":

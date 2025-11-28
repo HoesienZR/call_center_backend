@@ -25,7 +25,7 @@ class UserViewSet(ReadOnlyModelViewSet):
     @action(detail=False, methods=['get'], url_path='callers', url_name='callers')
     def callers(self, request):
         """
-        لیست تمام کاربرانی که در حداقل یک پروژه نقش 'caller' دارند.
+        List all users who have the role 'caller' in at least one project.
         """
         caller_user_ids = ProjectMembership.objects.filter(role='caller').values_list('user_id', flat=True).distinct()
         callers = self.get_queryset().filter(id__in=caller_user_ids)
@@ -36,7 +36,7 @@ class UserViewSet(ReadOnlyModelViewSet):
     @action(detail=False, methods=['get'], url_path='me', url_name='me')
     def me(self, request):
         """
-        اطلاعات کاربر لاگین کرده را برمی‌گرداند.
+        Return the profile information of the currently logged-in user.
         """
         serializer = self.get_serializer(request.user)
         return Response(serializer.data)

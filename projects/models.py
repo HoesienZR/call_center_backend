@@ -4,7 +4,7 @@ from django.db.models import Sum
 
 
 class Project(models.Model):
-    """مدل برای مدیریت پروژه‌های تماس مختلف"""
+    """Model for managing different call projects."""
     STATUS_CHOICES = [
         ('active', 'فعال'),
         ('inactive', 'غیرفعال'),
@@ -14,12 +14,20 @@ class Project(models.Model):
     name = models.CharField(max_length=100, verbose_name="نام پروژه")
     description = models.TextField(blank=True, verbose_name="توضیحات")
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='active', verbose_name="وضعیت")
-    created_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='created_projects',
-                                   verbose_name="ایجاد شده توسط")
+    created_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name='created_projects',
+        verbose_name="ایجاد شده توسط"
+    )
     created_at = models.DateTimeField(auto_now_add=True, verbose_name="تاریخ ایجاد")
     updated_at = models.DateTimeField(auto_now=True, verbose_name="تاریخ به‌روزرسانی")
-    members = models.ManyToManyField(settings.AUTH_USER_MODEL, through='ProjectMembership', related_name='projects',
-                                     verbose_name="اعضای پروژه")
+    members = models.ManyToManyField(
+        settings.AUTH_USER_MODEL,
+        through='ProjectMembership',
+        related_name='projects',
+        verbose_name="اعضای پروژه"
+    )
 
     class Meta:
         verbose_name = "پروژه"
@@ -33,7 +41,7 @@ class Project(models.Model):
         return self.name
 
     def get_statistics(self):
-        """دریافت آمار کلی پروژه"""
+        """Retrieve overall project statistics."""
         total_calls = self.calls.count()
 
         answered_calls = self.calls.filter(call_result='answered').count()
@@ -66,7 +74,7 @@ class Project(models.Model):
         }
 
     def get_caller_performance_report(self):
-        """دریافت گزارش عملکرد تماس‌گیرندگان برای این پروژه"""
+        """Retrieve caller performance report for this project."""
         caller_performance = []
         for project_caller in self.project_callers.filter(is_active=True):
             caller = project_caller.caller
@@ -94,7 +102,7 @@ class Project(models.Model):
 
 class ProjectMembership(models.Model):
     """
-    مدل واسط برای تعیین نقش کاربران در هر پروژه.
+    Intermediate model for defining user roles within each project.
     """
     ROLE_CHOICES = [
         ('admin', 'ادمین'),
@@ -110,17 +118,18 @@ class ProjectMembership(models.Model):
     class Meta:
         verbose_name = "عضویت در پروژه"
         verbose_name_plural = "عضویت‌ها در پروژه‌ها"
-        unique_together = ('project', 'user')  # هر کاربر در هر پروژه فقط یک نقش می‌تواند داشته باشد
+        unique_together = ('project', 'user')
         indexes = [
-            models.Index(fields=['role'])  # ایندکس برای فیلد role
+            models.Index(fields=['role'])
         ]
         ordering = ['-assigned_at']
 
     def __str__(self):
         return f"{self.user.username} as {self.get_role_display()} in {self.project.name}"
 
+
 class Question(models.Model):
-    """مدل برای سوالات مرتبط با پروژه"""
+    """Model for project-related questions."""
     project = models.ForeignKey(Project, on_delete=models.CASCADE, related_name='questions', verbose_name="پروژه")
     text = models.CharField(max_length=200, verbose_name="متن سوال")
 
@@ -128,13 +137,12 @@ class Question(models.Model):
         verbose_name = "سوال"
         verbose_name_plural = "سوالات"
 
-
     def __str__(self):
         return self.text
 
 
 class AnswerChoice(models.Model):
-    """مدل برای گزینه‌های پاسخ هر سوال"""
+    """Model for answer choices for each question."""
     question = models.ForeignKey(Question, on_delete=models.CASCADE, related_name='choices', verbose_name="سوال")
     text = models.CharField(max_length=100, verbose_name="متن گزینه")
 

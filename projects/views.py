@@ -48,6 +48,7 @@ class ProjectViewSet(viewsets.ModelViewSet):
         return super().create(request, *args, **kwargs)
 
     def get_queryset(self):
+        """Return projects accessible to the authenticated user, with optimized prefetching."""
         user = self.request.user
         base_prefetch = [
             Prefetch('questions', queryset=Question.objects.prefetch_related('choices')),
@@ -65,9 +66,10 @@ class ProjectViewSet(viewsets.ModelViewSet):
         return user.projects.distinct().prefetch_related(*base_prefetch)
 
     def perform_create(self, serializer):
+        """Create a project and automatically assign the creator as project admin."""
         user = self.request.user
         if not user.can_create_projects:
-            raise PermissionDenied("شما اجازه ساخت پروژه جدید را ندارید.")
+            raise PermissionDenied("You do not have permission to create new projects.")
         with transaction.atomic():
             project = serializer.save(created_by=user)
             ProjectMembership.objects.create(project=project, user=user, role='admin')
@@ -75,14 +77,15 @@ class ProjectViewSet(viewsets.ModelViewSet):
     @check_user_role_schema
     @action(detail=False, methods=['get'], url_path='check-user-role', permission_classes=[IsAuthenticated])
     def check_user_role(self, request):
+        """Check the role of a user in a project."""
         project_id = request.data.get('project_id')
         user_id = request.data.get('user_id')
 
         if not project_id:
-            return self._error_response('شناسه پروژه الزامی است')
+            return self._error_response('Project ID is required')
 
         if not user_id:
-            return self._error_response('شناسه کاربر الزامی است')
+            return self._error_response('User ID is required')
 
         try:
             project_membership = ProjectMembership.objects.get(project_id=project_id, user_id=user_id)
@@ -97,12 +100,13 @@ class ProjectViewSet(viewsets.ModelViewSet):
     @caller_performance_schema
     @action(detail=True, methods=["get"], permission_classes=[IsAuthenticated, IsProjectAdmin])
     def caller_performance(self, request, pk=None):
+        """Return caller performance report of the project."""
         project = self.get_object()
         report = project.get_caller_performance_report()
         return Response(report)
 
     def _error_response(self, message, status=status.HTTP_400_BAD_REQUEST):
-        """کمک به ارسال پاسخ خطا"""
+        """Helper to return error responses."""
         return Response({'error': message}, status=status)
 
 
@@ -115,6 +119,7 @@ class ProjectMembershipApiListView(mixins.ListModelMixin, generics.GenericAPIVie
         return self.list(request, *args, **kwargs)
 
     def get_queryset(self):
+        """Optionally filter memberships by project_id."""
         project_id = self.request.query_params.get('project_id')
         if project_id:
             return self.queryset.filter(project_id=project_id)
@@ -127,101 +132,93 @@ class CallerImportView(APIView):
     @caller_import_schema
     def post(self, request, project_id):
         """
-        آپلود فایل اکسل و افزودن مخاطبین جدید.
-        اگر تماس‌گیرنده وجود داشته باشد، اختصاص داده می‌شود.
+        Upload an Excel file and add new callers.
+        If callers already exist, they will be assigned to the project.
         """
         project = get_object_or_404(Project, id=project_id)
         file_obj = request.FILES.get("file")
 
         if not file_obj:
-            return self._error_response("فایل اکسل دریافت نشد", status=status.HTTP_400_BAD_REQUEST)
+            return self._error_response("Excel file was not received.", status=status.HTTP_400_BAD_REQUEST)
 
         try:
             created_contacts = import_caller_from_excel(file_obj, project)
             return Response(
                 {
-                    "message": f"{len(created_contacts)} تماس‌گیرنده اضافه شدند",
+                    "message": f"{len(created_contacts)} callers were added",
                     "created_count": len(created_contacts),
-                    "contacts": created_contacts,  # شامل شماره و نام
+                    "contacts": created_contacts,
                     "project": project.name,
                 },
                 status=status.HTTP_201_CREATED
             )
         except Exception as e:
             traceback.print_exc()
-            return self._error_response(f"خطا در فرآیند: {str(e)}", status=status.HTTP_400_BAD_REQUEST)
+            return self._error_response(f"Processing error: {str(e)}", status=status.HTTP_400_BAD_REQUEST)
 
     def _error_response(self, message, status=status.HTTP_400_BAD_REQUEST):
-        """کمک به ارسال پاسخ خطا"""
+        """Helper to return error responses."""
         return Response({"error": message}, status=status)
 
 
 @toggle_user_role_schema
-@api_view(["GET", ])
+@api_view(["GET"])
 def toggle_user_role(request):
+    """Toggle a user's role in a project."""
     try:
         project = check_if_user_exist(request.data.get('project_id'))
         user = check_if_user_exist(request.data.get('user_id'))
         project_membership = check_if_project_membership_exist(project=project, user=user)
-        old_role, new_role = toggle_user_project_membership_role(project=project, user=user,
-                                                                 project_membership=project_membership)
+        old_role, new_role = toggle_user_project_membership_role(
+            project=project,
+            user=user,
+            project_membership=project_membership
+        )
     except Exception as e:
         traceback.print_exc()
-        return Response({"error": f"خطا در فرآیند: {str(e)}"}, status=status.HTTP_400_BAD_REQUEST)
+        return Response({"error": f"Processing error: {str(e)}"}, status=status.HTTP_400_BAD_REQUEST)
 
     response_data = {
-        'message': 'نقش کاربر با موفقیت تغییر یافت',
+        'message': 'User role was successfully updated',
         'user_id': user.id,
         'username': user.username,
         'full_name': user.get_full_name(),
         'old_role': old_role,
         'new_role': new_role,
-        'new_role_display': project_membership.get_role_display()
+        'new_role_display': project_membership.get_role_display(),
     }
     return Response(response_data, status=status.HTTP_200_OK)
 
 
 class QuestionViewSet(viewsets.ModelViewSet):
-    """
-    ViewSet for managing questions associated with a project.
-    """
+    """ViewSet for managing project questions."""
     serializer_class = QuestionSerializer
     permission_classes = [IsAuthenticated, IsProjectAdmin | IsAdminUser]
 
     def get_queryset(self):
-        """
-        Retrieve questions for the specific project from the URL.
-        """
+        """Return all questions belonging to the project in the URL."""
         project_id = self.kwargs['project_pk']
         return Question.objects.filter(project_id=project_id).prefetch_related(
             Prefetch('choices', queryset=AnswerChoice.objects.all())
         )
 
     def perform_create(self, serializer):
-        """
-        Automatically link the created question to the project.
-        """
+        """Automatically assign the created question to the project."""
         project_id = self.kwargs['project_pk']
         serializer.save(project_id=project_id)
 
 
 class AnswerChoiceViewSet(viewsets.ModelViewSet):
-    """
-    ViewSet for managing answer choices associated with a question.
-    """
+    """ViewSet for managing answer choices of questions."""
     serializer_class = AnswerChoiceSerializer
     permission_classes = [IsAuthenticated, IsProjectAdmin | IsAdminUser]
 
     def get_queryset(self):
-        """
-        Retrieve answer choices for the specific question from the URL.
-        """
+        """Return all answer choices belonging to the question in the URL."""
         question_id = self.kwargs['question_pk']
         return AnswerChoice.objects.filter(question_id=question_id)
 
     def perform_create(self, serializer):
-        """
-        Automatically link the created answer choice to the question.
-        """
+        """Automatically assign the answer choice to its question."""
         question_id = self.kwargs['question_pk']
         serializer.save(question_id=question_id)
