@@ -8,7 +8,7 @@ from rest_framework.response import Response
 from rest_framework.viewsets import ReadOnlyModelViewSet
 
 from projects.models import ProjectMembership
-from users.services.user_schema import caller_schema, profile_schema
+from users.services.user_schema import user_schema
 from .serializers import CustomUserSerializer
 
 User = get_user_model()
@@ -16,12 +16,12 @@ User = get_user_model()
 logger = logging.getLogger(__name__)
 
 
+@user_schema
 class UserViewSet(ReadOnlyModelViewSet):
     queryset = User.objects.all()
     serializer_class = CustomUserSerializer
     permission_classes = [IsAuthenticated]
 
-    @caller_schema
     @action(detail=False, methods=['get'], url_path='callers', url_name='callers')
     def callers(self, request):
         """
@@ -32,7 +32,6 @@ class UserViewSet(ReadOnlyModelViewSet):
         serializer = self.get_serializer(callers, many=True)
         return Response(serializer.data, status=status.HTTP_200_OK)
 
-    @profile_schema
     @action(detail=False, methods=['get'], url_path='me', url_name='me')
     def me(self, request):
         """

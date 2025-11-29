@@ -13,6 +13,7 @@ from rest_framework.views import APIView
 from rest_framework.viewsets import mixins, generics
 
 from core.permissions import IsReadOnlyOrProjectAdmin, IsProjectAdmin
+from .models import AnswerChoice, Project, ProjectMembership, Question
 from .schema import (
     project_list_schema,
     project_create_schema,
@@ -20,9 +21,8 @@ from .schema import (
     caller_performance_schema,
     project_membership_list_schema,
     caller_import_schema,
-    toggle_user_role_schema,
+    toggle_user_role_schema, question_schemas, answer_choice_schemas, project_schema,
 )
-from .models import AnswerChoice, Project, ProjectMembership, Question
 from .serializers import QuestionSerializer, AnswerChoiceSerializer, ProjectSerializer, ProjectMembershipSerializer
 from .utils import (
     import_caller_from_excel,
@@ -33,7 +33,7 @@ from .utils import (
 
 logger = logging.getLogger(__name__)
 
-
+@project_schema
 class ProjectViewSet(viewsets.ModelViewSet):
     queryset = Project.objects.all()
     serializer_class = ProjectSerializer
@@ -190,35 +190,31 @@ def toggle_user_role(request):
     return Response(response_data, status=status.HTTP_200_OK)
 
 
+@question_schemas
 class QuestionViewSet(viewsets.ModelViewSet):
-    """ViewSet for managing project questions."""
     serializer_class = QuestionSerializer
     permission_classes = [IsAuthenticated, IsProjectAdmin | IsAdminUser]
 
+
     def get_queryset(self):
-        """Return all questions belonging to the project in the URL."""
         project_id = self.kwargs['project_pk']
         return Question.objects.filter(project_id=project_id).prefetch_related(
             Prefetch('choices', queryset=AnswerChoice.objects.all())
         )
 
     def perform_create(self, serializer):
-        """Automatically assign the created question to the project."""
         project_id = self.kwargs['project_pk']
         serializer.save(project_id=project_id)
 
-
+@answer_choice_schemas
 class AnswerChoiceViewSet(viewsets.ModelViewSet):
-    """ViewSet for managing answer choices of questions."""
     serializer_class = AnswerChoiceSerializer
     permission_classes = [IsAuthenticated, IsProjectAdmin | IsAdminUser]
 
     def get_queryset(self):
-        """Return all answer choices belonging to the question in the URL."""
         question_id = self.kwargs['question_pk']
         return AnswerChoice.objects.filter(question_id=question_id)
 
     def perform_create(self, serializer):
-        """Automatically assign the answer choice to its question."""
         question_id = self.kwargs['question_pk']
         serializer.save(question_id=question_id)

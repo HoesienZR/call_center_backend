@@ -1,11 +1,13 @@
-from drf_spectacular.utils import (
-    extend_schema,
-    OpenApiParameter,
-    OpenApiResponse,
-    OpenApiExample,
-)
+from drf_spectacular.utils import (OpenApiExample, OpenApiParameter,
+                                   OpenApiResponse, extend_schema, OpenApiTypes, extend_schema_view)
 
-from .serializers import ProjectSerializer, ProjectMembershipSerializer
+from .serializers import ProjectMembershipSerializer, ProjectSerializer, QuestionSerializer, AnswerChoiceSerializer
+
+# general schema for project management
+project_schema = extend_schema(
+    tags=["Projects"],
+    description="Manage projects: view, create, edit, and ....."
+)
 
 # =====================================================
 # --- ProjectViewSet Schemas
@@ -97,8 +99,10 @@ check_user_role_schema = extend_schema(
     summary="Check user's role in a project",
     description="Checks a user's role in a specified project.",
     parameters=[
-        OpenApiParameter(name="project_id", description="Project ID", required=True, type=int),
-        OpenApiParameter(name="user_id", description="User ID", required=True, type=int),
+        OpenApiParameter(name="project_id",
+                         description="Project ID", required=True, type=int),
+        OpenApiParameter(name="user_id", description="User ID",
+                         required=True, type=int),
     ],
     responses={
         200: ProjectMembershipSerializer,
@@ -128,7 +132,8 @@ check_user_role_schema = extend_schema(
 caller_performance_schema = extend_schema(
     summary="Get caller performance report",
     description="Returns a performance report for all callers in the project.",
-    responses={200: OpenApiResponse(description="Report successfully generated.")},
+    responses={200: OpenApiResponse(
+        description="Report successfully generated.")},
     examples=[
         OpenApiExample(
             "Example Response",
@@ -137,8 +142,10 @@ caller_performance_schema = extend_schema(
                 "project_id": 3,
                 "project_name": "Customer Feedback Campaign",
                 "callers": [
-                    {"caller_id": 7, "name": "Sara", "total_calls": 42, "success_rate": 85.5},
-                    {"caller_id": 9, "name": "Ali", "total_calls": 37, "success_rate": 78.0},
+                    {"caller_id": 7, "name": "Sara",
+                     "total_calls": 42, "success_rate": 85.5},
+                    {"caller_id": 9, "name": "Ali",
+                     "total_calls": 37, "success_rate": 78.0},
                 ],
             },
             response_only=True,
@@ -151,10 +158,12 @@ caller_performance_schema = extend_schema(
 # =====================================================
 
 project_membership_list_schema = extend_schema(
+    tags=['Projects'],
     summary="List project memberships",
     description="Lists all project memberships. You can filter by project using the `project_id` query parameter.",
     parameters=[
-        OpenApiParameter(name="project_id", description="Optional project ID filter", required=False, type=int)
+        OpenApiParameter(
+            name="project_id", description="Optional project ID filter", required=False, type=int)
     ],
     responses={200: ProjectMembershipSerializer(many=True)},
     examples=[
@@ -187,10 +196,12 @@ project_membership_list_schema = extend_schema(
 # =====================================================
 
 caller_import_schema = extend_schema(
+    tags=['Projects'],
     summary="Import callers from Excel",
     description="Upload an Excel file containing caller data and import them into the specified project.",
     parameters=[
-        OpenApiParameter(name="project_id", description="Project ID to import into", required=True, type=int)
+        OpenApiParameter(
+            name="project_id", description="Project ID to import into", required=True, type=int)
     ],
     request={
         "multipart/form-data": {
@@ -228,11 +239,14 @@ caller_import_schema = extend_schema(
 # =====================================================
 
 toggle_user_role_schema = extend_schema(
+    tags=['Projects'],
     summary="Toggle user role in project",
     description="Toggles a user's role in a project (e.g. between 'admin' and 'member').",
     parameters=[
-        OpenApiParameter(name="project_id", description="Project ID", required=True, type=int),
-        OpenApiParameter(name="user_id", description="User ID", required=True, type=int),
+        OpenApiParameter(name="project_id",
+                         description="Project ID", required=True, type=int),
+        OpenApiParameter(name="user_id", description="User ID",
+                         required=True, type=int),
     ],
     responses={
         200: OpenApiResponse(description="Role toggled successfully."),
@@ -254,4 +268,114 @@ toggle_user_role_schema = extend_schema(
             response_only=True,
         )
     ],
+)
+
+# =========================
+# Question & AnswerChoice Schemas
+# =========================
+
+question_schemas = extend_schema_view(
+    # List questions of a project
+    list=extend_schema(
+        tags=["Q&A"],
+        summary="List all questions for a project",
+        description="Retrieve all questions for a given project, including their answer choices.",
+        parameters=[
+            OpenApiParameter(
+                name='project_pk',
+                description='ID of the project whose questions are being retrieved.',
+                required=True,
+                type=OpenApiTypes.INT,
+                location=OpenApiParameter.PATH,
+            ),
+        ],
+        responses={
+            200: OpenApiResponse(
+                response='QuestionSerializer',
+                description="List of questions with their answer choices."
+            ),
+            404: OpenApiResponse(description="Project not found.")
+        }
+    ),
+    retrieve=extend_schema(
+        tags=["Q&A"],
+        summary="Retrieve a single question",
+        responses={200: QuestionSerializer}
+    ),
+    # Create a new question
+    create=extend_schema(
+        tags=['Q&A'],
+        summary="Create a new question for a project",
+        description="Automatically assigns the question to the project specified in the URL.",
+        request={
+            "application/json": {
+                "type": "object",
+                "properties": {
+                    "text": {"type": "string", "description": "The text of the question.",
+                             "example": "What is your favorite color?"},
+                    "is_active": {"type": "boolean", "description": "Is the question active?", "example": True},
+                },
+                "required": ["text"],
+            }
+        },
+        responses={
+            201: OpenApiResponse(
+                response='QuestionSerializer',
+                description="Question created successfully."
+            ),
+            400: OpenApiResponse(description="Invalid data provided."),
+        }
+    ),
+    update=extend_schema(
+        tags=["Q&A"],
+        summary="Update a question",
+        responses={200: QuestionSerializer}
+    ),
+    partial_update=extend_schema(
+        tags=["Q&A"],
+        summary="Partially update a question",
+        responses={200: QuestionSerializer}
+    ),
+    destroy=extend_schema(
+        tags=["Q&A"],
+        summary="Delete a question",
+        responses={204: OpenApiResponse(description="Question deleted")}
+    ),
+)
+
+answer_choice_schemas = extend_schema_view(
+    tags=["Q&A"],
+    list=extend_schema(
+        tags=["Q&A"],
+        summary="List answer choices of a question",
+        responses=AnswerChoiceSerializer,
+    ),
+    create=extend_schema(
+        tags=["Q&A"],
+        summary="Create a new answer choice",
+        request=AnswerChoiceSerializer,
+        responses=AnswerChoiceSerializer,
+    ),
+    retrieve=extend_schema(
+        tags=["Q&A"],
+        summary="Retrieve a single answer choice",
+        responses=AnswerChoiceSerializer,
+    ),
+    update=extend_schema(
+        tags=["Q&A"],
+        summary="Update an existing answer choice",
+        request=AnswerChoiceSerializer,
+        responses=AnswerChoiceSerializer,
+    ),
+    partial_update=extend_schema(
+        tags=["Q&A"],
+        summary="Partially update an existing answer choice",
+        request=AnswerChoiceSerializer,
+        responses=AnswerChoiceSerializer,
+    ),
+    destroy=extend_schema(
+        tags=["Q&A"],
+        summary="Delete an answer choice",
+        responses=OpenApiResponse(description="Answer choice deleted successfully"),
+    ),
 )

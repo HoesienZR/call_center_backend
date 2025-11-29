@@ -2,8 +2,8 @@ import random
 import requests
 from django.conf import settings
 
-OTP_EXPIRY = 300        # 5 دقیقه
-OTP_REQUEST_LIMIT = 180 # 3 دقیقه
+OTP_EXPIRY = 300        # 5 minutes
+OTP_REQUEST_LIMIT = 180 # 3 minutes
 
 def generate_otp():
     return str(random.randint(100000, 999999))

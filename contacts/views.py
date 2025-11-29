@@ -12,14 +12,7 @@ from rest_framework.views import APIView
 from projects.models import ProjectMembership
 from .models import Project, Contact
 from .permission import IsProjectCaller, IsProjectAdmin, ReleaseContactPermission
-from .schema import (
-    filter_contact_by_status_and_project_schema,
-    release_contact_schema,
-    get_contact_stats_schema,
-    filter_contact_by_project_schema,
-    filter_contact_by_status_schema,
-    request_new_contact_schema,
-)
+from .schema import contact_schema, request_new_contact_schema
 from .serializers import ContactSerializer, ContactStatsSerializer
 from .utils import assign_available_contact
 
@@ -27,7 +20,7 @@ logger = logging.getLogger(__name__)
 
 User = get_user_model()
 
-
+@contact_schema
 class ContactViewSet(viewsets.ModelViewSet):
     """
     ViewSet for managing contacts within projects.
@@ -94,7 +87,6 @@ class ContactViewSet(viewsets.ModelViewSet):
         except ProjectMembership.DoesNotExist:
             pass
 
-    @filter_contact_by_status_and_project_schema
     @action(detail=False, methods=['get'], url_path="filter_contact_by_status_and_project")
     def filter_contact_by_status_and_project(self, request):
         """
@@ -110,7 +102,6 @@ class ContactViewSet(viewsets.ModelViewSet):
         serializer = self.get_serializer(contacts_filtered, many=True)
         return Response(serializer.data, status=status.HTTP_200_OK)
 
-    @filter_contact_by_status_schema
     @action(detail=False, methods=['get'], url_path="filter_contact_by_status")
     def filter_contact_by_status(self, request):
         """
@@ -124,7 +115,6 @@ class ContactViewSet(viewsets.ModelViewSet):
         serializer = self.get_serializer(contact_filter_by_status, many=True)
         return Response(serializer.data, status=status.HTTP_200_OK)
 
-    @filter_contact_by_project_schema
     @action(detail=False, methods=['get'], url_path="filter_contact_by_project")
     def filter_contact_by_project(self, request):
         """
@@ -175,7 +165,6 @@ class ContactViewSet(viewsets.ModelViewSet):
         except Project.DoesNotExist:
             return self._error_response("Project not found.")
 
-    @release_contact_schema
     @action(detail=True, methods=['post'], url_path='release', permission_classes=[ReleaseContactPermission])
     def release_contact(self, request):
         """
@@ -232,7 +221,6 @@ class ContactViewSet(viewsets.ModelViewSet):
 
         return Response({"detail": "Call has been successfully submitted."}, status=status.HTTP_200_OK)
 
-    @get_contact_stats_schema
     @action(detail=True, methods=['get'], url_path='stats')
     def get_contact_stats(self, request, pk=None):
         """

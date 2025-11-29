@@ -10,13 +10,14 @@ from .models import CustomUser as User
 from .serializers import CustomUserSerializer
 from .services import auth_schema
 from .services import otp_service
+from .services.auth_schema import auth_token_post_schema
 
 
 class CustomAuthToken(ObtainAuthToken):
     """
     Custom class to obtain authentication token.
     """
-
+    @auth_token_post_schema
     def post(self, request, *args, **kwargs):
         serializer = self.serializer_class(
             data=request.data,
