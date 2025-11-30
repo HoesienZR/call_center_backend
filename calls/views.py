@@ -52,9 +52,9 @@ class CallViewSet(viewsets.ModelViewSet):
         project = get_object_or_404(Project, id=project_id) if project_id else None
 
         serializer_data = {
-            "contact": contact.id,
-            "caller": request.user.id,
-            "project": project.id if project else None,
+            "contact_id": contact.id,
+            "caller_id": request.user.id,
+            "project_id": project.id if project else None,
             "status": request.data.get('status', 'pending'),
             "call_result": request.data.get('call_result'),
             "notes": request.data.get('notes', ''),
