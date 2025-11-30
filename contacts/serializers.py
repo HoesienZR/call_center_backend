@@ -2,7 +2,6 @@ from django.db.models import Count, Q
 from persiantools.jdatetime import JalaliDate
 from rest_framework import serializers
 
-from calls.models import Call
 from users.models import CustomUser
 from .models import Contact
 
@@ -44,6 +43,7 @@ class ContactSerializer(serializers.ModelSerializer):
         return queryset
 
     def get_call_notes(self, obj):
+        from calls.models import Call
         """Return notes for calls belonging to the contact."""
         calls = Call.objects.filter(
             contact=obj,

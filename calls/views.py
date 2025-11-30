@@ -24,15 +24,16 @@ class CallViewSet(viewsets.ModelViewSet):
         project_id = self.request.GET.get('project_id')
         queryset = super().get_queryset()
 
+        if self.request.user.is_staff:
+            # admin همه کال‌ها را می‌تواند ببیند
+            return queryset.filter(project_id=project_id) if project_id else queryset
+
         if project_id:
             project = get_object_or_404(Project, id=project_id)
-            if self.request.user.is_staff:
-                return queryset.filter(project=project)
             if project.created_by == self.request.user:
                 return queryset.filter(project=project)
             return queryset.filter(caller=self.request.user, project=project)
 
-        # If no project_id is provided, allow callers to see their own calls
         return queryset.filter(caller=self.request.user)
 
     def perform_create(self, serializer):
@@ -41,109 +42,77 @@ class CallViewSet(viewsets.ModelViewSet):
     @call_create_detail_schema
     @action(detail=False, methods=["post"], permission_classes=[IsAuthenticated])
     def submit_call(self, request):
-        """
-        ایجاد یک تماس جدید با بازخورد
-        """
-        contact_id = request.data.get('caller_id') or request.data.get('contact_id')
-        project_id = request.data.get('project_id')
+        contact_id = request.data.get('contact') or request.data.get('contact_id')
+        project_id = request.data.get('project') or request.data.get('project_id')
 
         if not contact_id:
             return Response({"error": "contact_id الزامی است"}, status=400)
 
-        try:
-            contact = Contact.objects.get(id=contact_id)
-            project = Project.objects.get(id=project_id) if project_id else None
-        except (Contact.DoesNotExist, Project.DoesNotExist):
-            return Response({"error": "Contact یا Project یافت نشد"}, status=404)
+        contact = get_object_or_404(Contact, id=contact_id)
+        project = get_object_or_404(Project, id=project_id) if project_id else None
 
         serializer_data = {
-            "contact": contact_id,
+            "contact": contact.id,
             "caller": request.user.id,
-            "project": project_id,
-            "status": request.data.get('status', 'completed'),
+            "project": project.id if project else None,
+            "status": request.data.get('status', 'pending'),
             "call_result": request.data.get('call_result'),
             "notes": request.data.get('notes', ''),
             "duration": request.data.get('duration', 0),
             "follow_up_required": request.data.get('call_result') == 'callback_requested',
             "follow_up_date": request.data.get('follow_up_date'),
         }
-        serializer_data.update({k: v for k, v in request.data.items() if k not in serializer_data})
 
-        call_serializer = CallSerializer(data=serializer_data)
-        if call_serializer.is_valid(raise_exception=True):
-            call_serializer.save(caller_id=self.request.user.id)
-            return Response(call_serializer.data, status=status.HTTP_201_CREATED)
-
-        return Response(call_serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+        serializer = CallSerializer(data=serializer_data)
+        serializer.is_valid(raise_exception=True)
+        serializer.save(caller=request.user)
+        return Response(serializer.data, status=status.HTTP_201_CREATED)
 
     @call_edit_changesubmit_schema
     @action(detail=True, methods=["post"], permission_classes=[IsAuthenticated])
     def edit_call(self, request, pk=None):
         call = self.get_object()
 
-        if not call.can_edit(request.user):
-            return Response(
-                {"detail": "You are not authorized to edit this call."},
-                status=status.HTTP_403_FORBIDDEN
-            )
+        if not (call.caller == request.user or request.user.is_staff):
+            return Response({"detail": "شما اجازه ویرایش ندارید."}, status=status.HTTP_403_FORBIDDEN)
 
         serializer = self.get_serializer(call, data=request.data, partial=True)
         serializer.is_valid(raise_exception=True)
 
-        # ذخیره داده اصلی اگر اولین ویرایش است
         call.save_original_data_if_first_edit()
 
-        # ثبت تاریخچه ویرایش برای هر فیلد تغییر کرده
-        edit_history = []
+        edits = []
         for attr, new_value in serializer.validated_data.items():
             old_value = getattr(call, attr)
             if old_value != new_value:
-                edit_history.append(
-                    CallEditHistory(
-                        call=call,
-                        edited_by=request.user,
-                        field_name=attr,
-                        old_value=str(old_value),
-                        new_value=str(new_value),
-                        edit_reason=request.data.get("edit_reason", "")
-                    )
-                )
+                edits.append(CallEditHistory(
+                    call=call,
+                    edited_by=request.user,
+                    field_name=attr,
+                    old_value=str(old_value),
+                    new_value=str(new_value),
+                    edit_reason=request.data.get("edit_reason", "")
+                ))
 
-        # Bulk create for CallEditHistory
-        CallEditHistory.objects.bulk_create(edit_history)
-
-        # ذخیره تغییرات با Serializer
-        serializer.save(
-            edited_by=request.user,
-            edit_reason=request.data.get("edit_reason", ""),
-            edited_at=timezone.now()
-        )
-
+        CallEditHistory.objects.bulk_create(edits)
+        serializer.save(edited_by=request.user, edit_reason=request.data.get("edit_reason", ""),
+                        edited_at=timezone.now())
         return Response(self.get_serializer(call).data, status=status.HTTP_200_OK)
 
     @caller_feedback_schema
     @action(detail=True, methods=["post"], permission_classes=[IsAuthenticated])
     def submit_feedback(self, request, pk=None):
-        """
-        ثبت بازخورد برای یک تماس موجود.
-        """
         call = self.get_object()
         if call.caller != request.user:
-            return Response({"detail": "شما مجاز به ثبت بازخورد برای این تماس نیستید."},
-                            status=status.HTTP_403_FORBIDDEN)
+            return Response({"detail": "شما اجازه ثبت بازخورد ندارید."}, status=status.HTTP_403_FORBIDDEN)
 
-        feedback_text = request.data.get("notes")
+        feedback = request.data.get("notes")
         call_status = request.data.get("status")
-        if not feedback_text and not call_status:
-            return Response({"error": "حداقل یکی از فیلدهای feedback_text یا call_status الزامی است."},
-                            status=status.HTTP_400_BAD_REQUEST)
-
-        if feedback_text:
-            call.feedback = feedback_text
-
+        if feedback:
+            call.feedback = feedback
         if call_status:
             if call_status not in [choice[0] for choice in Call.CALL_STATUS_CHOICES]:
-                return Response({"error": "وضعیت تماس نامعتبر است."}, status=status.HTTP_400_BAD_REQUEST)
+                return Response({"error": "وضعیت تماس نامعتبر است."}, status=400)
             call.status = call_status
 
         call.save()
@@ -152,30 +121,21 @@ class CallViewSet(viewsets.ModelViewSet):
     @detailed_report_schema
     @action(detail=True, methods=["post"], permission_classes=[IsAuthenticated])
     def submit_detailed_report(self, request, pk=None):
-        """
-        ثبت گزارش تفصیلی برای یک تماس موجود.
-        """
         call = self.get_object()
         if call.caller != request.user:
-            return Response({"detail": "شما مجاز به ثبت گزارش برای این تماس نیستید."}, status=status.HTTP_403_FORBIDDEN)
+            return Response({"detail": "شما اجازه ثبت گزارش ندارید."}, status=403)
 
-        report_data = request.data.get("report_data")
+        report = request.data.get("report_data")
         call_status = request.data.get("call_status")
-
-        if not report_data and not call_status:
-            return Response({"error": "حداقل یکی از فیلدهای report_data یا call_status الزامی است."},
-                            status=status.HTTP_400_BAD_REQUEST)
-
-        if report_data:
-            call.detailed_report = report_data
-
+        if report:
+            call.detailed_report = report
         if call_status:
             if call_status not in [choice[0] for choice in Call.CALL_STATUS_CHOICES]:
-                return Response({"error": "وضعیت تماس نامعتبر است."}, status=status.HTTP_400_BAD_REQUEST)
+                return Response({"error": "وضعیت تماس نامعتبر است."}, 400)
             call.status = call_status
 
         call.save()
-        return Response(self.get_serializer(call).data, status=status.HTTP_200_OK)
+        return Response(self.get_serializer(call).data, status=200)
 
 
 @call_edit_history_schema

@@ -6,7 +6,7 @@ from calls.calls_import import (
     Question,
     AnswerChoice,
     Project,
-    CustomUserSerializer, QuestionSerializer, AnswerChoiceSerializer
+    CustomUserSerializer, QuestionSerializer, AnswerChoiceSerializer, ContactSerializer
 )
 
 from .models import CallAnswer, Call, CallEditHistory
@@ -29,11 +29,15 @@ class CallAnswerSerializer(serializers.ModelSerializer):
     question_text = serializers.CharField(source='question.text', read_only=True)
     selected_choice = serializers.PrimaryKeyRelatedField(queryset=AnswerChoice.objects.all(), allow_null=True,
                                                          required=False)
-    selected_choice_text = serializers.CharField(source='selected_choice.text', read_only=True)
+    selected_choice_text = serializers.SerializerMethodField()
 
     class Meta:
         model = CallAnswer
         fields = ['question', 'selected_choice', 'question_text', 'selected_choice_text']
+
+
+    def get_selected_choice_text(self, obj):
+        return obj.selected_choice.text if obj.selected_choice else None
 
 
 class CallSerializer(serializers.ModelSerializer):

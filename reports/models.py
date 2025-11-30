@@ -93,6 +93,7 @@ class CallStatistics(models.Model):
 
     def update_statistics(self):
         """به‌روزرسانی آمار بر اساس تماس‌های موجود"""
+        from calls.models import Call
         calls = Call.objects.filter(contact=self.contact, project=self.project)
 
         self.total_calls = calls.count()

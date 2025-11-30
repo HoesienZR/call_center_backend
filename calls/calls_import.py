@@ -9,7 +9,8 @@ from rest_framework import serializers
 
 # local app package
 from contacts.models import Contact
-from projects.models import Question, AnswerChoice, Project
+from contacts.serializers import ContactSerializer
+from projects.models import Question, AnswerChoice, Project, ProjectMembership
 from projects.serializers import QuestionSerializer, AnswerChoiceSerializer
 from users.serializers import CustomUserSerializer
 

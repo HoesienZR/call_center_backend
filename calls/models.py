@@ -2,7 +2,8 @@ from django.conf import settings
 from django.db import models
 import json
 
-from calls.calls_import import Contact, Question, AnswerChoice, Project
+from calls.calls_import import Contact, Question, AnswerChoice, Project, ProjectMembership
+from reports.models import CallStatistics
 
 
 # Model for storing call records
