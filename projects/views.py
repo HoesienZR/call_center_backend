@@ -77,7 +77,7 @@ class ProjectViewSet(viewsets.ModelViewSet):
             ProjectMembership.objects.create(project=project, user=user, role='admin')
 
     @check_user_role_schema
-    @action(detail=True, methods=['get'], url_path='check-user-role', permission_classes=[IsAuthenticated])
+    @action(detail=True, methods=['get'], url_path='check-user-role', permission_classes=[IsAuthenticated], url_name="check-user-role")
     def check_user_role(self, request, pk=None):
         """Check the role of a user in a project."""
         project_id = pk
@@ -162,6 +162,7 @@ class CallerImportView(APIView):
 
 @toggle_user_role_schema
 @api_view(["GET"])
+@action(detail=True, methods=["post"], url_path="toggle-role", url_name="toggle-user-role")
 def toggle_user_role(request):
     """Toggle a user's role in a project."""
     try:
