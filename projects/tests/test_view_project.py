@@ -12,7 +12,6 @@ User = get_user_model()
 def test_list_projects():
     client = APIClient()
 
-    # کاربر admin بساز
     user = User.objects.create_user(
         username="admin",
         password="1234",

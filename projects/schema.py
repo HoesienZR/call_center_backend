@@ -194,18 +194,17 @@ project_membership_list_schema = extend_schema(
 # --- CallerImportView Schema
 # =====================================================
 
+
+
 caller_import_schema = extend_schema(
     tags=['Projects'],
     summary="Import callers from Excel",
     description="Upload an Excel file containing caller data and import them into the specified project.",
-    parameters=[
-
-    ],
     request={
         "multipart/form-data": {
             "file": {
-                "type": "string",
-                "format": "binary",
+                "type": "string",   # حتما بزار
+                "format": "binary", # این باعث میشه فایل آپلود واقعی باشه
                 "description": "Excel file containing caller data"
             }
         }
