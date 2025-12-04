@@ -76,8 +76,8 @@ class Project(models.Model):
     def get_caller_performance_report(self):
         """Retrieve caller performance report for this project."""
         caller_performance = []
-        for project_caller in self.project_callers.filter(is_active=True):
-            caller = project_caller.caller
+        for project_caller in self.project_callers.filter(user__is_active=True):
+            caller = project_caller.user
             calls_by_caller = self.calls.filter(caller=caller)
 
             total_calls = calls_by_caller.count()
@@ -110,7 +110,7 @@ class ProjectMembership(models.Model):
         ('contact', 'مخاطب'),
     ]
 
-    project = models.ForeignKey(Project, on_delete=models.CASCADE, verbose_name="پروژه")
+    project = models.ForeignKey(Project, on_delete=models.CASCADE, verbose_name="پروژه", related_name="project_callers")
     user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, verbose_name="کاربر")
     role = models.CharField(max_length=20, choices=ROLE_CHOICES, verbose_name="نقش در پروژه")
     assigned_at = models.DateTimeField(auto_now_add=True, verbose_name="تاریخ تخصیص")

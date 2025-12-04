@@ -12,6 +12,7 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 from rest_framework.viewsets import mixins, generics
 
+from calls.models import CallAnswer
 from core.permissions import IsReadOnlyOrProjectAdmin, IsProjectAdmin
 from .models import AnswerChoice, Project, ProjectMembership, Question
 from .schema import (
@@ -32,6 +33,7 @@ from .utils import (
 )
 
 logger = logging.getLogger(__name__)
+
 
 @project_schema
 class ProjectViewSet(viewsets.ModelViewSet):
@@ -75,14 +77,11 @@ class ProjectViewSet(viewsets.ModelViewSet):
             ProjectMembership.objects.create(project=project, user=user, role='admin')
 
     @check_user_role_schema
-    @action(detail=False, methods=['get'], url_path='check-user-role', permission_classes=[IsAuthenticated])
-    def check_user_role(self, request):
+    @action(detail=True, methods=['get'], url_path='check-user-role', permission_classes=[IsAuthenticated])
+    def check_user_role(self, request, pk=None):
         """Check the role of a user in a project."""
-        project_id = request.data.get('project_id')
-        user_id = request.data.get('user_id')
-
-        if not project_id:
-            return self._error_response('Project ID is required')
+        project_id = pk
+        user_id = request.query_params.get('user_id')
 
         if not user_id:
             return self._error_response('User ID is required')
@@ -195,7 +194,6 @@ class QuestionViewSet(viewsets.ModelViewSet):
     serializer_class = QuestionSerializer
     permission_classes = [IsAuthenticated, IsProjectAdmin | IsAdminUser]
 
-
     def get_queryset(self):
         project_id = self.kwargs['project_pk']
         return Question.objects.filter(project_id=project_id).prefetch_related(
@@ -205,6 +203,7 @@ class QuestionViewSet(viewsets.ModelViewSet):
     def perform_create(self, serializer):
         project_id = self.kwargs['project_pk']
         serializer.save(project_id=project_id)
+
 
 @answer_choice_schemas
 class AnswerChoiceViewSet(viewsets.ModelViewSet):

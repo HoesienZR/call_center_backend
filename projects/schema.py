@@ -99,8 +99,7 @@ check_user_role_schema = extend_schema(
     summary="Check user's role in a project",
     description="Checks a user's role in a specified project.",
     parameters=[
-        OpenApiParameter(name="project_id",
-                         description="Project ID", required=True, type=int),
+
         OpenApiParameter(name="user_id", description="User ID",
                          required=True, type=int),
     ],
@@ -200,8 +199,7 @@ caller_import_schema = extend_schema(
     summary="Import callers from Excel",
     description="Upload an Excel file containing caller data and import them into the specified project.",
     parameters=[
-        OpenApiParameter(
-            name="project_id", description="Project ID to import into", required=True, type=int)
+
     ],
     request={
         "multipart/form-data": {
