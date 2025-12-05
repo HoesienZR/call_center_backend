@@ -8,7 +8,6 @@ User = get_user_model()
 
 class Contact(models.Model):
     CALL_STATUS_CHOICES = [
-        ('wrong_number', 'شماره اشتباه'),
         ('answered', 'پاسخ داد'),
         ('no_answer', 'پاسخ نداد'),
         ('pending', 'در حال انتظار')

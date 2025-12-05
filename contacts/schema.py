@@ -1,13 +1,10 @@
-from drf_spectacular.types import OpenApiTypes
-
-from contacts.serializers import ContactSerializer, ContactStatsSerializer
-from calls.serializers import CallSerializer
 from drf_spectacular.utils import (
     extend_schema_view,
     extend_schema,
-    OpenApiResponse,
-    OpenApiExample
+    OpenApiResponse
 )
+
+from contacts.serializers import ContactSerializer, ContactStatsSerializer
 
 contact_schema = extend_schema_view(
 
@@ -79,14 +76,7 @@ contact_schema = extend_schema_view(
     filter_contact_by_status=extend_schema(
         tags=["Contacts"],
         summary="Filter contacts by status",
-        parameters=[
-            {
-                "name": "status",
-                "required": True,
-                "in": "query",
-                "schema": {"type": "string"},
-            }
-        ],
+
         responses={200: ContactSerializer(many=True)}
     ),
 
@@ -94,14 +84,7 @@ contact_schema = extend_schema_view(
     filter_contact_by_project=extend_schema(
         tags=["Contacts"],
         summary="Filter contacts by project",
-        parameters=[
-            {
-                "name": "project_id",
-                "required": True,
-                "in": "query",
-                "schema": {"type": "integer"},
-            }]
-        ,
+
         responses={200: ContactSerializer(many=True)}
     ),
 
@@ -128,14 +111,6 @@ contact_schema = extend_schema_view(
         responses={200: OpenApiResponse(description="Contact released")}
     ),
 
-    # ------------------ SUBMIT CALL ------------------
-    submit_call=extend_schema(
-        tags=["Calls"],
-        summary="Submit a call for a contact",
-        request=CallSerializer,
-        responses={200: OpenApiResponse(description="Call submitted")}
-    ),
-
     # ------------------ CONTACT STATS ------------------
     get_contact_stats=extend_schema(
         tags=["Contacts"],
@@ -145,7 +120,6 @@ contact_schema = extend_schema_view(
     ),
 
 )
-
 
 request_new_contact_schema = extend_schema(
     tags=["Contacts"],
