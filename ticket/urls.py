@@ -4,6 +4,6 @@ from ticket import views
 
 router = DefaultRouter()
 
-router.register(r'tickets', views.TicketViewSet)
+router.register(r'tickets', views.TicketViewSet, basename='ticket')
 
 urlpatterns = router.urls

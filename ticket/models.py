@@ -10,7 +10,7 @@ class Ticket(models.Model):
     title = models.CharField(max_length=32,verbose_name="عنوان")
     description = models.TextField(verbose_name="متن")
     done = models.BooleanField(default=False,verbose_name="انجام شده ")
-    created_at = models.DateField(auto_now=True,verbose_name="ساخته شده")
+    created_at = models.DateTimeField(auto_now_add=True,verbose_name="ساخته شده")
     class Meta:
         verbose_name = 'تیکت'
         verbose_name_plural = "تیکت ها "
