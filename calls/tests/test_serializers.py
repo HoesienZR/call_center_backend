@@ -10,12 +10,12 @@ User = get_user_model()
 
 class CallSerializerTest(TestCase):
     def setUp(self):
-        self.user = User.objects.create_user(username="caller", password="password123")
+        self.user = User.objects.create_user(phone_number="09164896609", password="password123")
         self.project = Project.objects.create(name="Test Project", created_by=self.user)
         self.contact = Contact.objects.create(
             full_name="Test Contact",
             phone="123456789",
-            project=self.project  # حتماً project اضافه شده
+            project=self.project
         )
 
     def test_call_serializer_valid(self):
@@ -47,12 +47,12 @@ class CallSerializerTest(TestCase):
 
 class CallAnswerSerializerTest(TestCase):
     def setUp(self):
-        self.user = User.objects.create_user(username="caller", password="password123")
+        self.user = User.objects.create_user(phone_number="09164896609", password="password123")
         self.project = Project.objects.create(name="Test Project", created_by=self.user)
         self.contact = Contact.objects.create(
             full_name="Test Contact",
             phone="123456789",
-            project=self.project  # حتماً project اضافه شده
+            project=self.project
         )
         self.call = Call.objects.create(
             contact=self.contact,

@@ -9,7 +9,7 @@ from calls.calls_import import (
     CustomUserSerializer, QuestionSerializer, AnswerChoiceSerializer, ContactSerializer
 )
 
-from .models import CallAnswer, Call, CallEditHistory
+from .models import CallAnswer, Call
 
 User = get_user_model()
 
@@ -35,13 +35,12 @@ class CallAnswerSerializer(serializers.ModelSerializer):
         model = CallAnswer
         fields = ['question', 'selected_choice', 'question_text', 'selected_choice_text']
 
-
     def get_selected_choice_text(self, obj):
         return obj.selected_choice.text if obj.selected_choice else None
 
 
 class CallSerializer(serializers.ModelSerializer):
-    answers = CallAnswerSerializer(many=True, required=False)
+    answers = CallAnswerSerializer(many=True, required=False, read_only=True)
     contact = serializers.SerializerMethodField()
     caller = CustomUserSerializer(read_only=True)
     project = serializers.PrimaryKeyRelatedField(read_only=True)
@@ -93,11 +92,3 @@ class CallSerializer(serializers.ModelSerializer):
             if invalid_questions:
                 raise serializers.ValidationError(f"Invalid questions: {list(invalid_questions)}")
         return data
-
-
-class CallEditHistorySerializer(serializers.ModelSerializer):
-    edited_by_id = serializers.PrimaryKeyRelatedField(queryset=User.objects.all(), source='edited_by', write_only=True)
-
-    class Meta:
-        model = CallEditHistory
-        fields = '__all__'

@@ -12,7 +12,6 @@ Call.update_call_statistics = lambda self: None
 @pytest.fixture
 def test_user(db):
     return User.objects.create_user(
-        username=f"testuser_{random.randint(1000,9999)}",
         password="pass123",
         phone_number=f"0912{random.randint(1000000,9999999)}"
     )
@@ -69,7 +68,6 @@ def test_call_can_edit(test_user, test_project, test_contact):
 
     # Superuser can edit
     admin_user = User.objects.create_superuser(
-        username=f"admin_{random.randint(1000,9999)}",
         password="adminpass",
         phone_number=f"0912{random.randint(1000000,9999999)}"
     )

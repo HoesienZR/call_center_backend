@@ -1,6 +1,6 @@
 from django.contrib import admin
 
-from .models import Call, CallAnswer, CallEditHistory
+from .models import Call, CallAnswer
 
 
 # Admin configuration for CallAnswer
@@ -22,11 +22,3 @@ class CallAdmin(admin.ModelAdmin):
     ordering = ('-call_date',)  # Sort by latest call date
     list_display_links = ('contact', 'caller')  # Makes these fields clickable
 
-
-# Admin configuration for CallEditHistory
-@admin.register(CallEditHistory)
-class CallEditHistoryAdmin(admin.ModelAdmin):
-    list_display = ('call', 'edited_by', 'edit_date', 'field_name')
-    readonly_fields = [field.name for field in CallEditHistory._meta.fields]  # History must remain immutable
-    search_fields = ['call__contact__full_name', 'field_name', 'old_value', 'new_value']
-    ordering = ('-edit_date',)
