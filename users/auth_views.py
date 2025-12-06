@@ -30,7 +30,6 @@ class CustomAuthToken(ObtainAuthToken):
         return Response({
             'token': token.key,
             'user_id': user.pk,
-            'username': user.username,
             'email': user.email,
             'is_staff': user.is_staff,
             'is_superuser': user.is_superuser,
@@ -55,7 +54,7 @@ def login(request):
     # Try to find user by phone number
     try:
         user_obj = User.objects.get(phone_number=phone)
-        user = authenticate(username=user_obj.username, password=password)
+        user = authenticate(phone_number=user_obj.phone_number, password=password)
     except User.DoesNotExist:
         user = None
 
@@ -74,7 +73,6 @@ def login(request):
     return Response({
         'token': token.key,
         'user_id': user.pk,
-        'username': user.username,
         'email': user.email,
         'is_staff': user.is_staff,
         'is_superuser': user.is_superuser,
@@ -117,16 +115,15 @@ def register(request):
     """
     Register a new user with profile and phone number.
     """
-    username = request.data.get('username')
     password = request.data.get('password')
     email = request.data.get('email', '')
     first_name = request.data.get('first_name', '')
     last_name = request.data.get('last_name', '')
     phone_number = request.data.get('phone_number', '')
 
-    if not username or not password:
+    if not password:
         return Response({
-            'error': 'Username and password are required'
+            'error': 'password are required'
         }, status=status.HTTP_400_BAD_REQUEST)
 
     if not phone_number:
@@ -134,10 +131,6 @@ def register(request):
             'error': 'Phone number is required'
         }, status=status.HTTP_400_BAD_REQUEST)
 
-    if User.objects.filter(username=username).exists():
-        return Response({
-            'error': 'Username is already taken'
-        }, status=status.HTTP_400_BAD_REQUEST)
 
     if User.objects.filter(phone_number=phone_number).exists():
         return Response({
@@ -146,7 +139,6 @@ def register(request):
 
     try:
         user = User.objects.create_user(
-            username=username,
             password=password,
             email=email,
             first_name=first_name,
@@ -159,7 +151,6 @@ def register(request):
             'message': 'User successfully created',
             'token': token.key,
             'user_id': user.pk,
-            'username': user.username,
             'email': user.email,
         }, status=status.HTTP_201_CREATED)
 
@@ -175,57 +166,54 @@ def register(request):
 @api_view(['POST'])
 @permission_classes([AllowAny])
 def request_otp(request):
-    """
-    Request an OTP code to be sent to the user's phone.
-    """
     phone = request.data.get('phone')
-    if not phone:
-        return Response({"error": "Phone number is required"}, status=status.HTTP_400_BAD_REQUEST)
 
-    if not User.objects.filter(phone_number=phone).exists():
-        return Response({"error": "No user found with this phone number"}, status=status.HTTP_404_NOT_FOUND)
+    if not phone:
+        return Response({"error": "Phone number is required"}, status=400)
+
+    user, _ = User.objects.get_or_create(
+        phone_number=phone,
+        password=phone
+
+    )
 
     if not otp_service.can_request_otp(request, phone):
-        return Response({"error": "Previous code still valid. Try later."}, status=status.HTTP_429_TOO_MANY_REQUESTS)
+        return Response({"error": "Previous code still valid. Try later."}, status=429)
 
     otp_code = otp_service.generate_otp()
     otp_service.store_otp(request, phone, otp_code)
 
-    # If you have real SMS service
-    if otp_service.send_sms(phone, otp_code):
-        return Response({"message": "OTP code sent"}, status=status.HTTP_200_OK)
+    otp_service.send_sms(phone, otp_code)
 
-    return Response({"message": "OTP code (test): " + otp_code}, status=status.HTTP_200_OK)
+    return Response({"message": "OTP sent"}, status=200)
 
 
 @auth_schema.verify_otp_post_schema
 @api_view(['POST'])
 @permission_classes([AllowAny])
 def verify_otp(request):
-    """
-    Verify the OTP code sent to the user's phone.
-    """
     phone = request.data.get('phone')
     otp_code = request.data.get('otp')
 
     if not phone or not otp_code:
-        return Response({"error": "Phone number and OTP are required"}, status=status.HTTP_400_BAD_REQUEST)
+        return Response({"error": "Phone number and OTP are required"}, status=400)
 
     cached_otp = otp_service.get_cached_otp(request, phone)
+
     if not cached_otp or cached_otp != otp_code:
-        return Response({"error": "Invalid or expired OTP"}, status=status.HTTP_400_BAD_REQUEST)
+        return Response({"error": "Invalid or expired OTP"}, status=400)
 
     try:
         user = User.objects.get(phone_number=phone)
-        otp_service.clear_otp(request, phone)
-        token, _ = Token.objects.get_or_create(user=user)
-
-        return Response({
-            "token": token.key,
-            "user_id": user.pk,
-            "username": user.username,
-            "phone": user.phone_number
-        }, status=status.HTTP_200_OK)
-
     except User.DoesNotExist:
-        return Response({"error": "User not found"}, status=status.HTTP_404_NOT_FOUND)
+        return Response({"error": "User not found"}, status=404)
+
+    otp_service.clear_otp(request, phone)
+
+    token, _ = Token.objects.get_or_create(user=user)
+
+    return Response({
+        "token": token.key,
+        "user_id": user.pk,
+        "phone": user.phone_number,
+    }, status=200)

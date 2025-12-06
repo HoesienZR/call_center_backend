@@ -18,10 +18,11 @@ class TestUserViewSet:
     @pytest.fixture
     def test_user(self):
         user = CustomUser.objects.create_user(
-            username="testuser",
             password="strongpassword123",
             email="test@example.com",
-            phone_number="09123456789"
+            phone_number="09123456789",
+            first_name="Test",
+            last_name="User"
         )
         return user
 
@@ -38,8 +39,8 @@ class TestUserViewSet:
         project1 = Project.objects.create(name="Test Project 1", created_by=test_user)
         project2 = Project.objects.create(name="Test Project 2", created_by=test_user)
 
-        caller1 = CustomUser.objects.create_user(username="caller1", password="pass", phone_number="09120000001")
-        caller2 = CustomUser.objects.create_user(username="caller2", password="pass", phone_number="09120000002")
+        caller1 = CustomUser.objects.create_user(password="pass", phone_number="09120000001")
+        caller2 = CustomUser.objects.create_user(password="pass", phone_number="09120000002")
 
         ProjectMembership.objects.create(user=caller1, project=project1, role="caller")
         ProjectMembership.objects.create(user=caller2, project=project2, role="caller")
@@ -52,11 +53,13 @@ class TestUserViewSet:
     # ---------------- Tests ----------------
     def test_me_endpoint(self, api_client, test_user, token):
         api_client.credentials(HTTP_AUTHORIZATION=f'Token {token.key}')
-        url = reverse('users-me')  # نام url_name اکشن me
+        url = reverse('users-me')
         response = api_client.get(url)
         assert response.status_code == 200
-        assert response.data["username"] == "testuser"
         assert response.data["phone_number"] == "09123456789"
+        assert response.data["first_name"] == "Test"
+        assert response.data["last_name"] == "User"
+        assert response.data["email"] == "test@example.com"
 
     def test_callers_endpoint(self, api_client, test_user, token, projects_and_callers):
         api_client.credentials(HTTP_AUTHORIZATION=f'Token {token.key}')
@@ -65,12 +68,12 @@ class TestUserViewSet:
 
         assert response.status_code == 200
 
-        returned_usernames = [u["username"] for u in response.data]
+        returned_phone_numbers = [u["phone_number"] for u in response.data]
         callers = projects_and_callers["callers"]
 
         # بررسی اینکه caller1 و caller2 برگشت داده شده‌اند
-        assert "caller1" in returned_usernames
-        assert "caller2" in returned_usernames
+        assert callers[0].phone_number in returned_phone_numbers
+        assert callers[1].phone_number in returned_phone_numbers
 
         # test_user نقش caller ندارد، پس نباید داخل لیست باشد
-        assert "testuser" not in returned_usernames
+        assert test_user.phone_number not in returned_phone_numbers

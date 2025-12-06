@@ -7,9 +7,7 @@ from persiantools.jdatetime import JalaliDate
 
 @pytest.mark.django_db
 def test_custom_user_serializer():
-    # ایجاد یک کاربر نمونه
     user = CustomUser.objects.create_user(
-        username="testuser",
         password="strongpassword123",
         email="test@example.com",
         phone_number="09123456789",
@@ -21,8 +19,6 @@ def test_custom_user_serializer():
     serializer = CustomUserSerializer(user)
     data = serializer.data
 
-    # بررسی فیلدهای اصلی
-    assert data['username'] == "testuser"
     assert data['email'] == "test@example.com"
     assert data['first_name'] == "Test"
     assert data['last_name'] == "User"

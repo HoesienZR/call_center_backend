@@ -4,10 +4,10 @@ from drf_spectacular.utils import extend_schema, OpenApiResponse, OpenApiExample
 auth_token_post_schema = extend_schema(
     tags=['Auth'],
     summary='Obtain auth token',
-    description='Login with username/password and obtain auth token.',
+    description='Login with phone/password and obtain auth token.',
     request={
         "application/json": {
-            "username": "string",
+            "phone": "string",
             "password": "string",
         }
     },
@@ -16,7 +16,7 @@ auth_token_post_schema = extend_schema(
             name="Request Example",
             summary="Request body example",
             value={
-                "username": "admin",
+                "phone": "admin",
                 "password": "strongpassword123"
             },
             request_only=True
@@ -32,7 +32,6 @@ auth_token_post_schema = extend_schema(
                     value={
                         "token": "abcd1234token",
                         "user_id": 1,
-                        "username": "admin",
                         "email": "admin@example.com",
                         "is_staff": True,
                         "is_superuser": False,
@@ -47,8 +46,8 @@ auth_token_post_schema = extend_schema(
             examples=[
                 OpenApiExample(
                     name="MissingFields",
-                    summary="Missing username/password",
-                    value={"error": "Username and password are required"},
+                    summary="Missing password",
+                    value={"error": "password are required"},
                     response_only=True
                 )
             ]
@@ -88,7 +87,6 @@ login_post_schema = extend_schema(
                     value={
                         "token": "abcd1234token",
                         "user_id": 1,
-                        "username": "admin",
                         "email": "admin@example.com",
                         "is_staff": True,
                         "is_superuser": False,
@@ -169,7 +167,6 @@ user_profile_get_schema = extend_schema(
                     summary="User profile data",
                     value={
                         "id": 1,
-                        "username": "admin",
                         "email": "admin@example.com",
                         "first_name": "Admin",
                         "last_name": "User",
@@ -197,10 +194,9 @@ user_profile_get_schema = extend_schema(
 register_post_schema = extend_schema(
     tags=['Auth'],
     summary='Register new user',
-    description='Create a new user with username, phone, and password.',
+    description='Create a new user with phone, and password.',
     request={
         "application/json": {
-            "username": "string",
             "password": "string",
             "email": "string",
             "first_name": "string",
@@ -213,7 +209,6 @@ register_post_schema = extend_schema(
             name="Request Example",
             summary="Request body example",
             value={
-                "username": "newuser",
                 "password": "strongpassword123",
                 "email": "newuser@example.com",
                 "first_name": "New",
@@ -234,7 +229,6 @@ register_post_schema = extend_schema(
                         "message": "User successfully created",
                         "token": "abcd1234token",
                         "user_id": 2,
-                        "username": "newuser",
                         "email": "newuser@example.com"
                     },
                     response_only=True
@@ -246,8 +240,8 @@ register_post_schema = extend_schema(
             examples=[
                 OpenApiExample(
                     name="UserExists",
-                    summary="Username or phone already taken",
-                    value={"error": "Username is already taken"},
+                    summary="phone already taken",
+                    value={"error": "phone is already taken"},
                     response_only=True
                 )
             ]
@@ -257,77 +251,88 @@ register_post_schema = extend_schema(
 
 # ---------- request_otp ----------
 request_otp_post_schema = extend_schema(
-    tags=['Auth'],
-    summary='Request OTP',
-    description='Send OTP to user phone number.',
+    tags=["Auth"],
+    summary="Request OTP Code",
+    description="Send a one-time password (OTP) to the user's phone number.",
     request={
         "application/json": {
-            "phone": "string"
+            "type": "object",
+            "properties": {
+                "phone": {"type": "string", "example": "09123456789"},
+            },
+            "required": ["phone"]
         }
+    },
+    responses={
+        200: OpenApiResponse(
+            description="OTP successfully sent.",
+            response={
+                "type": "object",
+                "properties": {
+                    "message": {"type": "string", "example": "OTP sent"}
+                }
+            }
+        ),
+        400: OpenApiResponse(
+            description="Phone number is missing",
+            response={"type": "object", "properties": {"error": {"type": "string"}}},
+        ),
+        429: OpenApiResponse(
+            description="OTP already sent and still valid",
+            response={"type": "object", "properties": {"error": {"type": "string"}}},
+        ),
     },
     examples=[
         OpenApiExample(
-            name="Request Example",
-            summary="Request OTP example",
-            value={"phone": "09121234567"},
-            request_only=True
+            "Successful Send",
+            value={"phone": "09123456789"},
+            request_only=True,
         )
     ],
-    responses={
-        200: OpenApiResponse(
-            description="OTP sent",
-            examples=[
-                OpenApiExample(
-                    name="Success",
-                    summary="OTP sent",
-                    value={"message": "OTP code sent"},
-                    response_only=True
-                )
-            ]
-        ),
-        400: OpenApiResponse(description="Phone number required"),
-        404: OpenApiResponse(description="User not found"),
-        429: OpenApiResponse(description="Too many requests")
-    }
 )
 
 # ---------- verify_otp ----------
 verify_otp_post_schema = extend_schema(
-    tags=['Auth'],
-    summary='Verify OTP',
-    description='Verify OTP code sent to user phone and obtain auth token.',
+    tags=["Auth"],
+    summary="Verify OTP and Login",
+    description="Verifies the received OTP code and returns an auth token.",
     request={
         "application/json": {
-            "phone": "string",
-            "otp": "string"
+            "type": "object",
+            "properties": {
+                "phone": {"type": "string", "example": "09123456789"},
+                "otp": {"type": "string", "example": "123456"},
+            },
+            "required": ["phone", "otp"]
         }
+    },
+    responses={
+        200: OpenApiResponse(
+            description="OTP verified successfully, user authenticated.",
+            response={
+                "type": "object",
+                "properties": {
+                    "token": {"type": "string", "example": "5aa127f75b214d0c9a5afdb3f5a12345"},
+                    "user_id": {"type": "integer", "example": 1},
+                    "phone": {"type": "string", "example": "09123456789"},
+                }
+            }
+        ),
+        400: OpenApiResponse(
+            description="Invalid or expired OTP",
+            response={"type": "object", "properties": {"error": {"type": "string"}}}
+        ),
+        404: OpenApiResponse(
+            description="User not found",
+            response={"type": "object", "properties": {"error": {"type": "string"}}}
+        ),
     },
     examples=[
         OpenApiExample(
-            name="Request Example",
-            summary="Verify OTP request example",
-            value={"phone": "09121234567", "otp": "123456"},
-            request_only=True
+            "Verify OTP Example",
+            value={"phone": "09123456789", "otp": "123456"},
+            request_only=True,
         )
-    ],
-    responses={
-        200: OpenApiResponse(
-            description="OTP verified, token returned",
-            examples=[
-                OpenApiExample(
-                    name="Success",
-                    summary="OTP verified",
-                    value={
-                        "token": "abcd1234token",
-                        "user_id": 1,
-                        "username": "admin",
-                        "phone": "09121234567"
-                    },
-                    response_only=True
-                )
-            ]
-        ),
-        400: OpenApiResponse(description="Invalid or expired OTP"),
-        404: OpenApiResponse(description="User not found")
-    }
+    ]
 )
+
