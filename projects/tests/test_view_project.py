@@ -13,20 +13,17 @@ def test_list_projects():
     client = APIClient()
 
     user = User.objects.create_user(
-        username="admin",
         password="1234",
         phone_number="1000000001",
         is_staff=True,
         is_superuser=True,
     )
 
-    # پروژه بساز و created_by=کاربر بالا
     project = Project.objects.create(name="Test Project", created_by=user)
 
     # authenticate
     client.force_authenticate(user=user)
 
-    # گرفتن url لیست پروژه
     url = reverse("projects-list")
     response = client.get(url)
     assert response.status_code == 200
@@ -40,7 +37,7 @@ def test_list_projects():
 
 @pytest.mark.django_db
 def test_create_project(client):
-    user = User.objects.create_user(username="admin", password="1234", phone_number="1000000002",
+    user = User.objects.create_user(password="1234", phone_number="1000000002",
                                     can_create_projects=True)
     client.force_login(user)
 
@@ -56,12 +53,12 @@ def test_create_project(client):
 
 @pytest.mark.django_db
 def test_project_membership_list(client):
-    user = User.objects.create_user(username="admin", password="1234", phone_number="1000000003")
+    user = User.objects.create_user(password="1234", phone_number="1000000003")
     project = Project.objects.create(name="Membership Project", created_by=user)
     membership = ProjectMembership.objects.create(user=user, project=project, role="admin")
 
     client.force_login(user)
-    url = reverse("project-memberships-list")  # مسیر دستی
+    url = reverse("project-memberships-list")
     response = client.get(url, {"project_id": project.id})
     assert response.status_code == 200
     data = response.json()
@@ -72,7 +69,7 @@ def test_project_membership_list(client):
 
 @pytest.mark.django_db
 def test_question_crud(client):
-    user = User.objects.create_user(username="admin", password="1234", phone_number="1000000004")
+    user = User.objects.create_user(password="1234", phone_number="1000000004")
     project = Project.objects.create(name="Question Project", created_by=user)
     client.force_login(user)
 
@@ -93,7 +90,7 @@ def test_question_crud(client):
 
 @pytest.mark.django_db
 def test_answer_choice_crud(client):
-    user = User.objects.create_user(username="admin", password="1234", phone_number="1000000005")
+    user = User.objects.create_user(password="1234", phone_number="1000000005")
     project = Project.objects.create(name="Choice Project", created_by=user)
     question = Question.objects.create(project=project, text="Question with choices")
     client.force_login(user)

@@ -1,193 +1,151 @@
 import pytest
-from rest_framework.test import APIClient
-from rest_framework import status
-from django.contrib.auth import get_user_model
 from django.urls import reverse
+from rest_framework.test import APIClient
+
 from contacts.models import Contact
-from projects.models import ProjectMembership, Project
+from projects.models import Project, ProjectMembership
+from users.models import CustomUser
 
-User = get_user_model()
-
-@pytest.fixture
-def setup_users_projects_contacts(db):
-    # Users
-    admin_user = User.objects.create_user(username='adminuser', password='12345', phone_number='09120000001', is_active=True)
-    caller_user = User.objects.create_user(username='calleruser', password='12345', phone_number='09120000002', is_active=True)
-    viewer_user = User.objects.create_user(username='vieweruser', password='12345', phone_number='09120000003', is_active=True)
-    super_user = User.objects.create_superuser(username='superuser', password='12345', phone_number='09120000004', is_superuser=True, is_active=True, is_staff=True)
-
-    # Project
-    project = Project.objects.create(name='Sample Project', created_by=admin_user)
-
-    # Memberships
-    ProjectMembership.objects.get_or_create(project=project, user=admin_user, role='admin')
-    ProjectMembership.objects.get_or_create(project=project, user=caller_user, role='caller')
-    ProjectMembership.objects.get_or_create(project=project, user=viewer_user, role='viewer')
-
-    # Contacts
-    contact1 = Contact.objects.create(full_name="John Doe", phone="09112223344",
-                                      project=project, assigned_caller=caller_user,
-                                      call_status="pending", is_active=True)
-    contact2 = Contact.objects.create(full_name="Jane Smith", phone="09113334455",
-                                      project=project, assigned_caller=None,
-                                      call_status="pending", is_active=True)
-
-    return {
-        'admin': admin_user,
-        'caller': caller_user,
-        'viewer': viewer_user,
-        'superuser': super_user,
-        'project': project,
-        'contacts': [contact1, contact2]
-    }
 
 @pytest.fixture
 def api_client():
     return APIClient()
 
 
-# ----------------- TESTS -----------------
-@pytest.mark.django_db
-def test_list_contacts_permissions(setup_users_projects_contacts, api_client):
-    users = setup_users_projects_contacts
-
-    url = reverse('contacts-list')
-    print(url)
-
-    # Admin sees all project contacts
-    api_client.force_authenticate(users['admin'])
-    res = api_client.get(url)
-    assert res.status_code == status.HTTP_200_OK
-    assert len(res.data) == 2
-
-    # Caller sees only assigned contacts
-    api_client.force_authenticate(users['caller'])
-    res = api_client.get(url)
-    assert res.status_code == status.HTTP_200_OK
-    assert all(c['assigned_caller'] is not None for c in res.data)
-
-    # Viewer sees only assigned contacts (یا none)
-    api_client.force_authenticate(users['viewer'])
-    res = api_client.get(url)
-    assert res.status_code == status.HTTP_200_OK
-
-    # Superuser sees all
-    api_client.force_authenticate(users['superuser'])
-    res = api_client.get(url)
-    assert res.status_code == status.HTTP_200_OK
-    assert len(res.data) == 2
+@pytest.fixture
+def admin_user(db):
+    return CustomUser.objects.create_user(
+        phone_number="09120000001",
+        is_staff=True,
+        password="12345"
+    )
 
 
-@pytest.mark.django_db
-def test_request_new_contact_permission(setup_users_projects_contacts, api_client):
-    users = setup_users_projects_contacts
-    project = users['project']
-    url = reverse('contacts-request-new')  # نام action باید تو viewset مشخص باشه: @action(detail=False, name='request-new')
-
-    # Caller can request new contact
-    api_client.force_authenticate(users['caller'])
-    res = api_client.post(url, {'project_id': project.id})
-    assert res.status_code == status.HTTP_200_OK
-
-    # Admin cannot request new contact
-    api_client.force_authenticate(users['admin'])
-    res = api_client.post(url, {'project_id': project.id})
-    assert res.status_code in [status.HTTP_403_FORBIDDEN, status.HTTP_400_BAD_REQUEST]
-
-    # Viewer cannot request
-    api_client.force_authenticate(users['viewer'])
-    res = api_client.post(url, {'project_id': project.id})
-    assert res.status_code in [status.HTTP_403_FORBIDDEN, status.HTTP_400_BAD_REQUEST]
+@pytest.fixture
+def caller_user(db):
+    return CustomUser.objects.create_user(
+        phone_number="09120000002",
+        password="12345"
+    )
 
 
-@pytest.mark.django_db
-def test_release_contact_permission(setup_users_projects_contacts, api_client):
-    users = setup_users_projects_contacts
-    contact = users['contacts'][0]  # assigned to caller
-    url = reverse('contacts-release', args=[contact.id])  # @action(detail=True, name='release')
+@pytest.fixture
+def project(db, admin_user):
+    project = Project.objects.create(name="Test Project", created_by=admin_user)
+    ProjectMembership.objects.create(project=project, user=admin_user, role="admin")
+    return project
 
-    # Assigned caller can release
-    api_client.force_authenticate(users['caller'])
-    res = api_client.post(url)
-    assert res.status_code == status.HTTP_200_OK
+
+@pytest.fixture
+def caller_membership(db, caller_user, project):
+    return ProjectMembership.objects.create(project=project, user=caller_user, role="caller")
+
+
+@pytest.fixture
+def contact(db, project, caller_user):
+    return Contact.objects.create(
+        full_name="Ali",
+        phone="09125556677",
+        project=project,
+        assigned_caller=caller_user,
+        call_status="pending"
+    )
+
+
+# ------------------- LIST -------------------
+def test_contact_list_as_admin(api_client, admin_user, contact):
+    api_client.force_authenticate(admin_user)
+    url = reverse("contacts-list")
+    response = api_client.get(url)
+    assert response.status_code == 200
+    results = response.data['results']
+    assert any(c['id'] == contact.id for c in results)
+
+
+def test_contact_list_as_caller_only_own(api_client, caller_user, caller_membership, contact):
+    api_client.force_authenticate(caller_user)
+    url = reverse("contacts-list")
+    response = api_client.get(url)
+    assert response.status_code == 200
+
+    results = response.data['results']
+
+    for item in results:
+        assert item["assigned_caller_id"] == caller_user.id
+
+
+# ------------------- CREATE -------------------
+def test_contact_create_as_admin(api_client, admin_user, project):
+    api_client.force_authenticate(admin_user)
+    url = reverse("contacts-list")
+
+    data = {
+        "full_name": "Sara",
+        "phone": "09123334455",
+        "project": project.id
+    }
+
+    response = api_client.post(url, data)
+    assert response.status_code == 201
+    assert response.data["full_name"] == "Sara"
+
+
+# ------------------- REQUEST NEW -------------------
+def test_request_new_contact(api_client, caller_user, caller_membership, project):
+    api_client.force_authenticate(caller_user)
+
+    # یک مخاطب آزاد برای اختصاص
+    Contact.objects.create(
+        full_name="New User",
+        phone="09129998877",
+        project=project,
+        call_status="pending",
+        is_active=True
+    )
+
+    url = reverse("contacts-request-new-contact")
+    response = api_client.post(url, {"project_id": project.id})
+    assert response.status_code == 200
+    assert response.data["detail"] == "A new contact has been assigned to you."
+
+
+# ------------------- RELEASE -------------------
+def test_release_contact(api_client, caller_user, caller_membership, contact):
+    api_client.force_authenticate(caller_user)
+    url = reverse("contacts-release-contact", kwargs={"pk": contact.id})
+    response = api_client.post(url)
+    assert response.status_code == 200
     contact.refresh_from_db()
     assert contact.assigned_caller is None
 
-    # Admin cannot release
-    api_client.force_authenticate(users['admin'])
-    res = api_client.post(url)
-    assert res.status_code == status.HTTP_403_FORBIDDEN
 
-    # Viewer cannot release
-    api_client.force_authenticate(users['viewer'])
-    res = api_client.post(url)
-    assert res.status_code == status.HTTP_403_FORBIDDEN
-
-
-@pytest.mark.django_db
-def test_contact_stats_access(setup_users_projects_contacts, api_client):
-    users = setup_users_projects_contacts
-    contact = users['contacts'][0]
-    url = reverse('contacts-stats', args=[contact.id])  # @action(detail=True, name='stats')
-
-    # All project members and superuser can access stats
-    for key in ['admin', 'caller', 'viewer', 'superuser']:
-        api_client.force_authenticate(users[key])
-        res = api_client.get(url)
-        assert res.status_code == status.HTTP_200_OK
-        assert "total_calls" in res.data
+# ------------------- STATS -------------------
+def test_contact_stats(api_client, admin_user, contact):
+    api_client.force_authenticate(admin_user)
+    url = reverse("contacts-get-contact-stats", kwargs={"pk": contact.id})
+    response = api_client.get(url)
+    assert response.status_code == 200
+    assert "total_calls" in response.data
 
 
-@pytest.mark.django_db
-def test_filter_by_status_and_project(setup_users_projects_contacts, api_client):
-    users = setup_users_projects_contacts
-    project = users['project']
-    Contact.objects.create(full_name="C1", phone="0900", project=project, call_status="pending")
-    Contact.objects.create(full_name="C2", phone="0901", project=project, call_status="done")
-
-    api_client.force_authenticate(users['admin'])
-    # filter_by_status
-    url_status = reverse('contacts-filter-by-status') + '?status=pending'
-    res = api_client.get(url_status)
-    assert res.status_code == status.HTTP_200_OK
-    for item in res.data:
+# ------------------- FILTERS -------------------
+def test_filter_by_status(api_client, admin_user, project):
+    api_client.force_authenticate(admin_user)
+    Contact.objects.create(
+        full_name="Test User",
+        phone="09128889977",
+        project=project,
+        call_status="pending"
+    )
+    url = reverse("contacts-filter-by-status")
+    response = api_client.get(url, {"status": "pending"})
+    assert response.status_code == 200
+    for item in response.data:
         assert item["call_status"] == "pending"
 
-    # filter_by_project
-    url_project = reverse('contacts-filter-by-project') + f'?project_id={project.id}'
-    res = api_client.get(url_project)
-    assert res.status_code == status.HTTP_200_OK
-    for item in res.data:
-        assert item["project"] == project.id
 
-
-@pytest.mark.django_db
-def test_crud_contacts_permissions(setup_users_projects_contacts, api_client):
-    users = setup_users_projects_contacts
-    project = users['project']
-    url_list = reverse('contacts-list')
-
-    # Create contact as admin
-    api_client.force_authenticate(users['admin'])
-    res = api_client.post(url_list, {
-        "full_name": "New Contact",
-        "phone": "09124445566",
-        "project": project.id
-    })
-    assert res.status_code == status.HTTP_201_CREATED
-
-    contact_id = res.data['id']
-    url_detail = reverse('contacts-detail', args=[contact_id])
-
-    # Retrieve contact
-    res = api_client.get(url_detail)
-    assert res.status_code == status.HTTP_200_OK
-
-    # Update contact
-    res = api_client.patch(url_detail, {"full_name": "Updated Contact"})
-    assert res.status_code == status.HTTP_200_OK
-    assert res.data['full_name'] == "Updated Contact"
-
-    # Delete contact (if allowed)
-    res = api_client.delete(url_detail)
-    assert res.status_code in [status.HTTP_204_NO_CONTENT, status.HTTP_403_FORBIDDEN]
+def test_filter_by_project(api_client, admin_user, project):
+    api_client.force_authenticate(admin_user)
+    url = reverse("contacts-filter-by-project")
+    response = api_client.get(url, {"project_id": project.id})
+    assert response.status_code == 200

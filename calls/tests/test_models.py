@@ -1,7 +1,7 @@
 import pytest
 import random
 from django.contrib.auth import get_user_model
-from calls.models import Call, CallEditHistory, CallAnswer
+from calls.models import Call, CallAnswer
 from calls.calls_import import Contact, Project, Question, AnswerChoice, ProjectMembership
 
 User = get_user_model()
@@ -76,24 +76,6 @@ def test_call_can_edit(test_user, test_project, test_contact):
     # Caller can edit (no ProjectMembership, so default False)
     assert call.can_edit(test_user) is False
 
-
-@pytest.mark.django_db
-def test_call_edit_history(test_user, test_project, test_contact):
-    call = Call.objects.create(contact=test_contact, caller=test_user, project=test_project)
-
-    edit = CallEditHistory.objects.create(
-        call=call,
-        edited_by=test_user,
-        field_name="notes",
-        old_value="",
-        new_value="Updated notes",
-        edit_reason="Testing"
-    )
-
-    assert edit.id is not None
-    assert edit.call == call
-    assert edit.field_name == "notes"
-    assert edit.new_value == "Updated notes"
 
 
 @pytest.mark.django_db

@@ -12,7 +12,7 @@ User = get_user_model()
 # ---------------------------------------------------------
 @pytest.mark.django_db
 def test_project_creation():
-    user = User.objects.create_user(username="admin", password="1234")
+    user = User.objects.create_user(password="1234", phone_number="09164896609")
 
     project = Project.objects.create(
         name="Test Project",
@@ -31,8 +31,8 @@ def test_project_creation():
 # ---------------------------------------------------------
 @pytest.mark.django_db
 def test_project_membership_relationship():
-    user = User.objects.create_user(username="user1", password="1234", phone_number="0123456789")
-    admin = User.objects.create_user(username="admin", password="1234", phone_number="01234567890")
+    user = User.objects.create_user(password="1234", phone_number="0123456789")
+    admin = User.objects.create_user(password="1234", phone_number="01234567890")
 
     project = Project.objects.create(name="Project 1", created_by=admin)
 
@@ -52,8 +52,8 @@ def test_project_membership_relationship():
 # ---------------------------------------------------------
 @pytest.mark.django_db
 def test_project_statistics():
-    admin = User.objects.create_user(username="admin", password="1234", phone_number="012345678")
-    caller = User.objects.create_user(username="caller", password="1234", phone_number="01234567891")
+    admin = User.objects.create_user( password="1234", phone_number="012345678")
+    caller = User.objects.create_user(password="1234", phone_number="01234567891")
 
     project = Project.objects.create(name="Stats Project", created_by=admin)
 
@@ -96,8 +96,8 @@ def test_project_statistics():
 # ---------------------------------------------------------
 @pytest.mark.django_db
 def test_caller_performance_report():
-    admin = User.objects.create_user(username="admin", password="1234", phone_number="01234567")
-    caller = User.objects.create_user(username="caller", password="1234", phone_number="0123456789")
+    admin = User.objects.create_user(password="1234", phone_number="01234567")
+    caller = User.objects.create_user(password="1234", phone_number="0123456789")
 
     project = Project.objects.create(name="Perf Project", created_by=admin)
 
@@ -134,7 +134,7 @@ def test_caller_performance_report():
     assert len(report) == 1
     caller_stats = report[0]
 
-    assert caller_stats["caller_username"] == "caller"
+    assert caller_stats["caller_phone"] == "0123456789"
     assert caller_stats["total_calls"] == 2
     assert caller_stats["answered_calls"] == 1
     assert caller_stats["total_duration_seconds"] == 20
@@ -146,7 +146,7 @@ def test_caller_performance_report():
 # ---------------------------------------------------------
 @pytest.mark.django_db
 def test_question_and_answer_choice():
-    admin = User.objects.create_user(username="admin", password="1234")
+    admin = User.objects.create_user(password="1234", phone_number="09164896609")
     project = Project.objects.create(name="Q Project", created_by=admin)
 
     question = Question.objects.create(

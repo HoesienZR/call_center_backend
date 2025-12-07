@@ -10,7 +10,6 @@ class TestTicketSerializer:
     @pytest.fixture
     def user(self):
         return CustomUser.objects.create_user(
-            username="user1",
             password="pass123",
             phone_number="09123456789"
         )

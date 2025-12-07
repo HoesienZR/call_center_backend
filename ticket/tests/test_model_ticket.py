@@ -9,14 +9,11 @@ User = get_user_model()
 class TestTicketModel:
 
     def test_ticket_creation(self):
-        # ایجاد کاربر
         user = User.objects.create_user(
-            username="testuser",
             password="12345678",
             phone_number="09120000000"
         )
 
-        # ایجاد تیکت
         ticket = Ticket.objects.create(
             user=user,
             title="Test Ticket",
@@ -31,7 +28,6 @@ class TestTicketModel:
 
     def test_ticket_default_done_value(self):
         user = User.objects.create_user(
-            username="user2",
             password="12345678",
             phone_number="09120000001"
         )
@@ -41,11 +37,10 @@ class TestTicketModel:
             description="Testing default"
         )
 
-        assert ticket.done is False  # مقدار پیش‌فرض
+        assert ticket.done is False
 
     def test_ticket_str_method(self):
         user = User.objects.create_user(
-            username="user3",
             password="12345678",
             phone_number="09120000002"
         )
@@ -59,7 +54,6 @@ class TestTicketModel:
 
     def test_ticket_ordering(self):
         user = User.objects.create_user(
-            username="user4",
             password="12345678",
             phone_number="09120000003"
         )
@@ -69,5 +63,4 @@ class TestTicketModel:
 
         tickets = Ticket.objects.all()
 
-        # چون ordering بر اساس -created_at هست t2 باید اول بیاید
         assert tickets.first() == t2

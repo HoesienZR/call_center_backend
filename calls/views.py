@@ -1,10 +1,16 @@
-from django.shortcuts import get_object_or_404
-from rest_framework import viewsets
-from rest_framework.permissions import IsAuthenticated
+from datetime import datetime
 
-from projects.models import Project
+from django.shortcuts import get_object_or_404
+from drf_excel.mixins import XLSXFileMixin
+from drf_excel.renderers import XLSXRenderer
+from rest_framework import viewsets
+from rest_framework.permissions import IsAuthenticated, IsAdminUser
+
+from core.pagination import LargePageSizePagination
+from core.permissions import IsProjectAdmin, IsAdminOrProjectAdmin
+from projects.models import Project, ProjectMembership
 from .models import Call
-from .serializers import CallSerializer
+from .serializers import CallSerializer, CallExcelSerializer
 from .services.call_schema import call_schema, project_filter_schema
 
 
@@ -20,7 +26,6 @@ class CallViewSet(viewsets.ModelViewSet):
         queryset = super().get_queryset()
 
         if self.request.user.is_staff:
-            # admin همه کال‌ها را می‌تواند ببیند
             return queryset.filter(project_id=project_id) if project_id else queryset
 
         if project_id:
@@ -33,3 +38,20 @@ class CallViewSet(viewsets.ModelViewSet):
 
     def perform_create(self, serializer):
         serializer.save(caller=self.request.user)
+
+
+class CallExcelViewSet(XLSXFileMixin, viewsets.ReadOnlyModelViewSet):
+    renderer_classes = (XLSXRenderer,)
+    filename = f'report_in_{datetime.now()}.xlsx'
+    pagination_class = LargePageSizePagination
+    queryset = Call.objects.select_related('contact', 'project', 'caller', ).prefetch_related('answers__question',
+                                                                                              'answers__selected_choice').all()
+    serializer_class = CallExcelSerializer
+    permission_classes = [IsAuthenticated, IsAdminOrProjectAdmin]
+
+    def get_queryset(self):
+        user = self.request.user
+        if user.is_superuser:
+            return self.queryset
+        project_ids = ProjectMembership.objects.filter(user=user).values_list('project_id', flat=True)
+        return self.queryset.filter(project__id__in=project_ids)

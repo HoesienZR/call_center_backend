@@ -2,7 +2,6 @@ from django.conf import settings
 from django.db import models
 
 from calls.calls_import import Contact, Question, AnswerChoice, Project, ProjectMembership
-from reports.models import CallStatistics
 
 
 # Model for storing call records
@@ -108,12 +107,7 @@ class Call(models.Model):
     def save(self, *args, **kwargs):
         self.save_original_data_if_first_edit()
         super().save(*args, **kwargs)
-        self.update_call_statistics()
 
-    def update_call_statistics(self):
-        """Update call statistics for the contact/project"""
-        stats, created = CallStatistics.objects.get_or_create(contact=self.contact, project=self.project)
-        stats.update_statistics()
 
     class Meta:
         verbose_name = "تماسس"
@@ -136,43 +130,6 @@ class Call(models.Model):
         """Set original data"""
         self.original_data = data_dict if data_dict else {}
 
-
-# Model for storing edit history of calls
-class CallEditHistory(models.Model):
-    """Model for storing the edit history of calls"""
-
-    call = models.ForeignKey(
-        Call,
-        on_delete=models.CASCADE,
-        related_name='edit_history',
-        verbose_name="تماس"
-    )
-    edited_by = models.ForeignKey(
-        settings.AUTH_USER_MODEL,
-        on_delete=models.CASCADE,
-        related_name='call_edits',
-        verbose_name="تفییر داده شده توسط"
-    )
-    edit_date = models.DateTimeField(
-        auto_now_add=True,
-        verbose_name="تاریخ تغییر",
-        db_index=True
-    )
-    field_name = models.CharField(max_length=50, verbose_name="نام فیلد")
-    old_value = models.TextField(blank=True, verbose_name="ارزش گذشته")
-    new_value = models.TextField(blank=True, verbose_name="ارزش جدید")
-    edit_reason = models.TextField(blank=True, verbose_name="دلیل تغییر")
-
-    class Meta:
-        verbose_name = "تاریخجه ادیت تماس"
-        verbose_name_plural = "تاریخجه ادیت تماس ها"
-        ordering = ['-edit_date']
-        indexes = [
-            models.Index(fields=['edit_date']),
-        ]
-
-    def __str__(self):
-        return f"{self.call.id} - {self.field_name} - {self.edited_by.get_full_name()}"
 
 
 # Model for storing answers to call questions

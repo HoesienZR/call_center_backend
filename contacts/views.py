@@ -1,19 +1,22 @@
 import logging
+import traceback
+
 from django.contrib.auth import get_user_model
 from django.db.models import Q, Count
 from django.shortcuts import get_object_or_404
 from rest_framework import viewsets, status
 from rest_framework.decorators import action
-from rest_framework.permissions import IsAuthenticated, IsAdminUser
+from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
+from rest_framework.views import APIView
 
+from core.excel_imports import import_contacts_from_excel
+from core.permissions import IsAdminOrProjectAdminOrProjectCaller, IsAdminOrProjectAdmin
 from projects.models import Project, ProjectMembership
-from .models import Contact, ContactLog
-from .permission import IsProjectAdmin, IsProjectCaller, ReleaseContactPermission
-from .serializers import ContactSerializer, ContactStatsSerializer
-from .utils import assign_available_contact
+from .models import Contact
+from .permission import ReleaseContactPermission
 from .schema import contact_schema, request_new_contact_schema
-from calls.serializers import CallSerializer
+from .serializers import ContactSerializer, ContactStatsSerializer
 
 logger = logging.getLogger(__name__)
 User = get_user_model()
@@ -27,7 +30,7 @@ class ContactViewSet(viewsets.ModelViewSet):
     releasing contacts, submitting calls, and viewing contact stats.
     """
     serializer_class = ContactSerializer
-    permission_classes = [IsAuthenticated, IsProjectAdmin | IsAdminUser | IsProjectCaller]
+    permission_classes = [IsAuthenticated, IsAdminOrProjectAdminOrProjectCaller]
 
     def get_serializer_context(self):
         return {'request': self.request, 'view': self, 'format': self.format_kwarg}
@@ -125,7 +128,6 @@ class ContactViewSet(viewsets.ModelViewSet):
         contact.save()
         return Response({'detail': 'Contact successfully released.'}, status=status.HTTP_200_OK)
 
-
     @action(detail=True, methods=['get'], url_path='stats')
     def get_contact_stats(self, request, pk=None):
         """
@@ -155,3 +157,40 @@ class ContactViewSet(viewsets.ModelViewSet):
         contacts = self.get_queryset().filter(project_id=project_id)
         serializer = self.get_serializer(contacts, many=True)
         return Response(serializer.data, status=status.HTTP_200_OK)
+
+
+class ContactImportView(APIView):
+    permission_classes = [IsAuthenticated, IsAdminOrProjectAdmin]
+
+    def post(self, request, project_id):
+        """
+        آپلود فایل اکسل و افزودن مخاطبین جدید.
+        اگر تماس‌گیرنده وجود داشته باشد، اختصاص داده می‌شود.
+        """
+        project = get_object_or_404(Project, id=project_id)
+        file_obj = request.FILES.get("file")
+
+        if not file_obj:
+            return Response(
+                {"error": "فایل اکسل ارسال نشده است."},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        try:
+            created_contacts = import_contacts_from_excel(file_obj, project)
+            return Response(
+                {
+                    "message": f"{len(created_contacts)} مخاطب با موفقیت اضافه شد.",
+                    "created_count": len(created_contacts),
+                    "contacts": created_contacts,
+                    "project": project.name,
+                },
+                status=status.HTTP_201_CREATED
+            )
+
+        except Exception as e:
+            traceback.print_exc()
+            return Response(
+                {"error": f"خطا در پردازش فایل: {str(e)}"},
+                status=status.HTTP_400_BAD_REQUEST
+            )

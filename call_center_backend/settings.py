@@ -94,8 +94,6 @@ INSTALLED_APPS = [
     'ticket',
     "calls",
     "contacts",
-    "files",
-    'reports',
     "drf_spectacular",
     "drf_spectacular_sidecar"
 ]

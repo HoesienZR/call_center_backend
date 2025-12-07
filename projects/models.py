@@ -89,7 +89,7 @@ class Project(models.Model):
 
             caller_performance.append({
                 'caller_id': caller.id,
-                'caller_username': caller.username,
+                'caller_phone': caller.phone_number,
                 'caller_full_name': caller.get_full_name(),
                 'total_calls': total_calls,
                 'answered_calls': answered_calls,

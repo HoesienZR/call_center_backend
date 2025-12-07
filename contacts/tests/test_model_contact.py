@@ -7,8 +7,7 @@ User = get_user_model()
 
 class ContactModelTest(TestCase):
     def setUp(self):
-        self.user = User.objects.create_user(username='testuser', password='12345')
-        # پروژه را با created_by مشخص کنید
+        self.user = User.objects.create_user(phone_number='09164896609', password='12345')
         self.project = Project.objects.create(name='Test Project', created_by=self.user)
 
     def test_create_contact(self):

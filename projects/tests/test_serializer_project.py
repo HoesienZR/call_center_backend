@@ -14,7 +14,6 @@ User = get_user_model()
 @pytest.fixture
 def user(db):
     return User.objects.create_user(
-        username="testuser",
         email="test@example.com",
         phone_number="+989123456789",
         password="password123"

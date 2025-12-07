@@ -6,7 +6,6 @@ from ticket.models import Ticket
 @pytest.mark.django_db
 def test_send_message_to_developer_signal():
     user = CustomUser.objects.create_user(
-        username="testuser",
         password="pass123",
         phone_number="09123456789",
         first_name="Test",
