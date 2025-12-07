@@ -140,3 +140,7 @@ class IsAdminOrProjectAdminOrProjectCaller(BasePermission):
         return IsAdminUser().has_permission(request, view) or \
                IsProjectAdmin().has_permission(request, view) or \
                 IsProjectCaller.has_permission(request, view)
+
+class ReleaseContactPermission(BasePermission):
+    def has_object_permission(self, request, view, obj: Contact):
+        return obj.assigned_caller is not None and request.user.id == obj.assigned_caller.id

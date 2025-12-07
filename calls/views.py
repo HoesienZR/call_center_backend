@@ -11,7 +11,7 @@ from core.permissions import IsProjectAdmin, IsAdminOrProjectAdmin
 from projects.models import Project, ProjectMembership
 from .models import Call
 from .serializers import CallSerializer, CallExcelSerializer
-from .services.call_schema import call_schema, project_filter_schema
+from .services.call_schema import call_schema, project_filter_schema, schema_call_excel
 
 
 @call_schema
@@ -40,6 +40,7 @@ class CallViewSet(viewsets.ModelViewSet):
         serializer.save(caller=self.request.user)
 
 
+@schema_call_excel
 class CallExcelViewSet(XLSXFileMixin, viewsets.ReadOnlyModelViewSet):
     renderer_classes = (XLSXRenderer,)
     filename = f'report_in_{datetime.now()}.xlsx'

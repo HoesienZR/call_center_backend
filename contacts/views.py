@@ -11,11 +11,10 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from core.excel_imports import import_contacts_from_excel
-from core.permissions import IsAdminOrProjectAdminOrProjectCaller, IsAdminOrProjectAdmin
+from core.permissions import IsAdminOrProjectAdminOrProjectCaller, IsAdminOrProjectAdmin, ReleaseContactPermission
 from projects.models import Project, ProjectMembership
 from .models import Contact
-from .permission import ReleaseContactPermission
-from .schema import contact_schema, request_new_contact_schema
+from .schema import contact_schema, request_new_contact_schema, schema_contact_import
 from .serializers import ContactSerializer, ContactStatsSerializer
 
 logger = logging.getLogger(__name__)
@@ -158,7 +157,7 @@ class ContactViewSet(viewsets.ModelViewSet):
         serializer = self.get_serializer(contacts, many=True)
         return Response(serializer.data, status=status.HTTP_200_OK)
 
-
+@schema_contact_import
 class ContactImportView(APIView):
     permission_classes = [IsAuthenticated, IsAdminOrProjectAdmin]
 
