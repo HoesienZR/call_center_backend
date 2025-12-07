@@ -1,33 +1,32 @@
-from django.conf import settings
+from django.contrib.auth import get_user_model
 from django.db import models
 
 from projects.models import Project
 
+User = get_user_model()
 
-# Create your models here.
 
 class Contact(models.Model):
     CALL_STATUS_CHOICES = [
-        ('wrong_number', 'شماره اشتباه'),
         ('answered', 'پاسخ داد'),
         ('no_answer', 'پاسخ نداد'),
         ('pending', 'در حال انتظار')
     ]
-    is_special = models.BooleanField(default=False)
     GENDER_CHOICES = [
         ('male', 'مرد'),
         ("female", "زن"),
         ("none", "ترجیح میدهم که نگویم")
     ]
-    birth_date = models.DateField(null=True, blank=True, verbose_name="تاریخ تولد")
 
-    project = models.ForeignKey("Project", on_delete=models.CASCADE, related_name="contacts", verbose_name="پروژه")
+    is_special = models.BooleanField(default=False)
+    birth_date = models.DateField(null=True, blank=True, verbose_name="تاریخ تولد")
+    project = models.ForeignKey(Project, on_delete=models.CASCADE, related_name="contacts", verbose_name="پروژه")
     full_name = models.CharField(max_length=100, verbose_name="نام کامل")
     phone = models.CharField(max_length=20, verbose_name="شماره تماس")
     email = models.EmailField(blank=True, verbose_name="ایمیل")
     address = models.TextField(blank=True, verbose_name="آدرس")
     assigned_caller = models.ForeignKey(
-        settings.AUTH_USER_MODEL,
+        User,
         on_delete=models.SET_NULL,
         null=True,
         blank=True,
@@ -41,15 +40,14 @@ class Contact(models.Model):
     is_active = models.BooleanField(default=True, verbose_name="فعال")
     created_at = models.DateTimeField(auto_now_add=True, verbose_name="تاریخ ایجاد")
     updated_at = models.DateTimeField(auto_now=True, verbose_name="تاریخ به‌روزرسانی")
-    created_by = models.ForeignKey(settings.AUTH_USER_MODEL, related_name="created_contacts", null=True, blank=True,
+    created_by = models.ForeignKey(get_user_model(), related_name="created_contacts", null=True, blank=True,
                                    on_delete=models.CASCADE, verbose_name="ایجاد شده توسط")
     gender = models.CharField(max_length=20, choices=GENDER_CHOICES, default="none")
 
     class Meta:
         indexes = [
-            models.Index(fields = [ 'project','assigned_caller', 'call_status', 'is_active']),
-            models.Index(fields = ['gender']),
-
+            models.Index(fields=['project', 'assigned_caller', 'call_status', 'is_active']),
+            models.Index(fields=['gender']),
         ]
         verbose_name = "مخاطب"
         verbose_name_plural = "مخاطبین"
@@ -59,11 +57,8 @@ class Contact(models.Model):
     def __str__(self):
         return f"{self.full_name} - {self.phone}"
 
-
-
     def get_last_call(self):
-        last_call = self.calls.order_by("-call_date").first()
-        return last_call
+        return self.calls.order_by("-call_date").first()
 
 
 class ContactLog(models.Model):
@@ -71,7 +66,7 @@ class ContactLog(models.Model):
     timestamp = models.DateTimeField(auto_now_add=True, verbose_name="زمان")
     contact = models.ForeignKey('Contact', on_delete=models.CASCADE, related_name='logs', verbose_name="مخاطب")
     performed_by = models.ForeignKey(
-        settings.AUTH_USER_MODEL,
+        get_user_model(),
         on_delete=models.SET_NULL,
         null=True,
         blank=True,
@@ -82,6 +77,9 @@ class ContactLog(models.Model):
         verbose_name = "لاگ مخاطب"
         verbose_name_plural = "لاگ‌های مخاطب"
         ordering = ['-timestamp']
+        indexes = [
+            models.Index(fields=['timestamp']),
+        ]
 
     def __str__(self):
         return f"{self.action} - {self.contact.full_name} at {self.timestamp}"

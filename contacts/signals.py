@@ -7,18 +7,20 @@ from calls.models import Call
 @receiver(post_save, sender=Call)
 def update_contact_status_on_callback_request(sender, instance, created, **kwargs):
     """
-    سیگنال برای تغییر وضعیت مخاطب به "pending" زمانی که نتیجه تماس "callback_requested" باشد
+    Signal: Update contact status to "pending" when the call result is "callback_requested".
     """
     if instance.call_result == 'callback_requested':
-        # به‌روزرسانی وضعیت مخاطب به "در انتظار تماس"
+        # Update the contact's status to "pending"
         contact = instance.contact
         contact.call_status = 'pending'
         contact.save(update_fields=['call_status'])
 
-        # اختیاری: ثبت لاگ برای این تغییر
         from .models import ContactLog
         ContactLog.objects.create(
             contact=contact,
-            action=f"وضعیت تماس به 'در انتظار' تغییر یافت بدلیل درخواست تماس مجدد در تماس شماره {instance.id}",
+            action=(
+                f"Call status changed to 'pending' due to a callback request "
+                f"from call ID {instance.id}"
+            ),
             performed_by=instance.caller
         )

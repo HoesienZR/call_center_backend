@@ -1,11 +1,12 @@
 import re
 
+from projects.models import ProjectMembership
+
 
 def normalize_phone_number(phone):
     if not phone:
         return phone
 
-    # حذف فاصله‌ها و کاراکترهای اضافی
     phone = re.sub(r'[\s\-\(\)]', '', phone)
 
     # تبدیل به فرمت استاندارد
@@ -51,3 +52,15 @@ def clean_string_field(value):
     if value is None or str(value).strip().lower() in ['nan', 'none', '']:
         return None
     return str(value).strip()
+
+
+def is_caller_user(user, project=None):
+    """
+    بررسی اینکه آیا کاربر یک تماس‌گیرنده است یا خیر
+    تماس‌گیرندگان: کاربرانی که is_staff=False و is_superuser=False هستند
+    """
+    if user.is_staff:
+        return True
+    if project:
+        return ProjectMembership.objects.filter(user=user, project=project, role="caller").exists()
+    return ProjectMembership.objects.filter(user=user, role="caller").exists()

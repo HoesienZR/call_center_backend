@@ -1,7 +1,10 @@
-from rest_framework.permissions import BasePermission, SAFE_METHODS
+from rest_framework.permissions import BasePermission, SAFE_METHODS, IsAdminUser
 from contacts.models import Contact
 from calls.models import Call
 from projects.models import Project, ProjectMembership
+
+
+
 
 class ProjectPermissionMixin:
     """Mixin برای استخراج پروژه از آبجکت و بررسی دسترسی"""
@@ -106,3 +109,38 @@ class IsReadOnlyOrProjectAdmin(ProjectPermissionMixin, BasePermission):
             user=request.user,
             role='admin'
         ).exists()
+
+
+class IsAdminOrProjectAdmin(BasePermission):
+    message = "Only admins or project admins can export Excel reports."
+
+    def has_permission(self, request, view):
+        user = request.user
+
+        if not user.is_authenticated:
+            return False
+
+        # Superuser is always allowed
+        if user.is_superuser:
+            return True
+
+        # Find membership(s) for this user
+        memberships = ProjectMembership.objects.filter(user=user)
+
+        # No membership = no access
+        if not memberships.exists():
+            return False
+
+        # Only allow admin-level roles
+        return memberships.filter(role__in=["admin", "project_admin", "supervisor"]).exists()
+
+
+class IsAdminOrProjectAdminOrProjectCaller(BasePermission):
+    def has_permission(self, request, view):
+        return IsAdminUser().has_permission(request, view) or \
+               IsProjectAdmin().has_permission(request, view) or \
+                IsProjectCaller.has_permission(request, view)
+
+class ReleaseContactPermission(BasePermission):
+    def has_object_permission(self, request, view, obj: Contact):
+        return obj.assigned_caller is not None and request.user.id == obj.assigned_caller.id

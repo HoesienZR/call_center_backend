@@ -1,25 +1,99 @@
 from django.contrib import admin
 from django.contrib.auth.admin import UserAdmin
-from .models import *
+from django import forms
+from .models import CustomUser
 
-# Register your models here.
+
+# ----------------------------
+# Custom User Creation Form
+# ----------------------------
+class CustomUserCreationForm(forms.ModelForm):
+    """
+    Form shown when creating a new user in the admin panel.
+    """
+
+    password1 = forms.CharField(label="Password", widget=forms.PasswordInput)
+    password2 = forms.CharField(label="Confirm password", widget=forms.PasswordInput)
+
+    class Meta:
+        model = CustomUser
+        fields = ("phone_number", "can_create_projects")
+
+    def clean_password2(self):
+        p1 = self.cleaned_data.get("password1")
+        p2 = self.cleaned_data.get("password2")
+        if p1 and p2 and p1 != p2:
+            raise forms.ValidationError("Passwords do not match")
+        return p2
+
+    def save(self, commit=True):
+        user = super().save(commit=False)
+        user.set_password(self.cleaned_data["password1"])
+        if commit:
+            user.save()
+        return user
 
 
+# ----------------------------
+# Custom User Change Form
+# ----------------------------
+class CustomUserChangeForm(forms.ModelForm):
+    class Meta:
+        model = CustomUser
+        fields = (
+            "phone_number",
+            "can_create_projects",
+            "is_active",
+            "is_staff",
+            "is_superuser",
+            "groups",
+            "user_permissions",
+        )
+
+
+# ----------------------------
+# Custom UserAdmin
+# ----------------------------
 @admin.register(CustomUser)
 class CustomUserAdmin(UserAdmin):
     """
-    نمایش مدل کاربر سفارشی در پنل ادمین.
-    فیلدهای جدید (phone_number, can_create_projects) به آن اضافه شده است.
+    Custom admin panel for phone-number-based user model without username.
     """
-    # فیلدهایی که در فرم ویرایش کاربر نمایش داده می‌شوند
-    fieldsets = UserAdmin.fieldsets + (
-        ('اطلاعات تکمیلی', {'fields': ('phone_number', 'can_create_projects')}),
+
+    add_form = CustomUserCreationForm
+    form = CustomUserChangeForm
+    model = CustomUser
+
+    list_display = (
+        "phone_number",
+        "can_create_projects",
+        "is_active",
+        "is_staff",
+        "is_superuser",
     )
-    # فیلدهایی که هنگام ساخت کاربر جدید نمایش داده می‌شوند
-    add_fieldsets = UserAdmin.add_fieldsets + (
-        ('اطلاعات تکمیلی', {'fields': ('phone_number', 'can_create_projects')}),
+
+    search_fields = ("phone_number",)
+    ordering = ("phone_number",)
+
+    fieldsets = (
+        (None, {"fields": ("phone_number", "password")}),
+        ("Permissions", {"fields": ("is_active", "is_staff", "is_superuser", "groups", "user_permissions")}),
+        ("Extra", {"fields": ("can_create_projects",)}),
     )
-    # فیلدهایی که در لیست کاربران نمایش داده می‌شوند
-    list_display = ('username', 'email', 'first_name', 'last_name', 'is_staff', 'phone_number', 'can_create_projects')
-    # فیلدهایی که می‌توان بر اساس آن‌ها جستجو کرد
-    search_fields = ('username', 'first_name', 'last_name', 'email', 'phone_number')
+
+    add_fieldsets = (
+        (
+            None,
+            {
+                "classes": ("wide",),
+                "fields": (
+                    "phone_number",
+                    "password1",
+                    "password2",
+                    "can_create_projects",
+                    "is_staff",
+                    "is_superuser",
+                ),
+            },
+        ),
+    )

@@ -249,7 +249,7 @@ var _default = function _default(XRegExp) {
    *   alias: 'Hexadecimal',
    *   bmp: '0-9A-Fa-f'
    * }]);
-   * XRegExp('\\p{XDigit}:\\p{Hexadecimal}+').test('0:3D'); // -> true
+   * XRegExp('\\p{XDigit}:\\p{Hexadecimal}+').tests('0:3D'); // -> true
    */
 
   XRegExp.addUnicodeData = function (data, typePrefix) {
@@ -1165,7 +1165,7 @@ XRegExp._pad4 = pad4;
  *   () => '\\x07',
  *   {scope: 'all'}
  * );
- * XRegExp('\\a[\\a-\\n]+').test('\x07\n\x07'); // -> true
+ * XRegExp('\\a[\\a-\\n]+').tests('\x07\n\x07'); // -> true
  *
  * // Add the U (ungreedy) flag from PCRE and RE2, which reverses greedy and lazy quantifiers.
  * // Since `scope` is not specified, it uses 'default' (i.e., transformations apply outside of
@@ -1782,7 +1782,7 @@ XRegExp.split = function (str, separator, limit) {
  * `sticky` arguments specify the search start position, and whether the match must start at the
  * specified position only. The `lastIndex` property of the provided regex is not used, but is
  * updated for compatibility. Also fixes browser bugs compared to the native
- * `RegExp.prototype.test` and can be used reliably cross-browser.
+ * `RegExp.prototype.tests` and can be used reliably cross-browser.
  *
  * @memberOf XRegExp
  * @param {String} str String to search.
@@ -1794,11 +1794,11 @@ XRegExp.split = function (str, separator, limit) {
  * @example
  *
  * // Basic use
- * XRegExp.test('abc', /c/); // -> true
+ * XRegExp.tests('abc', /c/); // -> true
  *
  * // With pos and sticky
- * XRegExp.test('abc', /c/, 0, 'sticky'); // -> false
- * XRegExp.test('abc', /c/, 2, 'sticky'); // -> true
+ * XRegExp.tests('abc', /c/, 0, 'sticky'); // -> false
+ * XRegExp.tests('abc', /c/, 2, 'sticky'); // -> true
  */
 // Do this the easy way :-)
 
@@ -1998,7 +1998,7 @@ fixed.exec = function (str) {
   return match;
 };
 /**
- * Fixes browser bugs in the native `RegExp.prototype.test`.
+ * Fixes browser bugs in the native `RegExp.prototype.tests`.
  *
  * @memberOf RegExp
  * @param {String} str String to search.

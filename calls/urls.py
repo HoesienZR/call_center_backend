@@ -1,9 +1,9 @@
 from rest_framework.routers import DefaultRouter
-from . import views
+
+from .views import CallViewSet, CallExcelViewSet
 
 router = DefaultRouter()
-
-router.register(r'calls', views.CallViewSet)
-router.register(r'call-edit-history', views.CallEditHistoryViewSet)
+router.register(r'calls', CallViewSet, basename='calls')
+router.register(r'excel', CallExcelViewSet, basename='excel')
 
 urlpatterns = router.urls

@@ -42,7 +42,7 @@ var/
 .installed.cfg
 *.egg
 
-# Unit test / coverage reports
+# Unit tests / coverage reports
 htmlcov/
 .tox/
 .coverage
