@@ -71,7 +71,10 @@ def import_contacts_from_excel(file_obj, project: Project):
         raw_phone = clean_string_field(row.get("contact_phone", "")).strip()
         assigned_caller_phone = clean_string_field(row.get("assigned_caller_phone", ""))
         custom_fields = clean_string_field(row.get('custom_fields',""))
-        gender_raw = clean_string_field(row.get('gender',"")).strip()
+          if clean_string_field(row.get('gender',"")) is None:
+            gender_raw = None
+        else :
+            gender_raw = clean_string_field(row.get('gender',"")).strip()
         gender = gender_map.get(gender_raw)
         birth_date_str  = clean_string_field(row.get('birth_date',""))
         address = clean_string_field(row.get('address',''))
