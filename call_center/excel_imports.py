@@ -5,7 +5,7 @@ from django.contrib.auth import get_user_model
 from django.contrib.messages.apps import update_level_tags
 
 from .models import Contact, Project, ProjectCaller
-from .utils import is_caller_user, clean_string_field
+from .utils import is_caller_user, clean_string_field, generate_username
 from datetime import datetime
 
 User = get_user_model()
@@ -21,31 +21,31 @@ def import_callers_from_excel(file_obj):
     except Exception:
         df = pd.read_csv(file_obj, dtype=str)
 
-    required_columns = ["username", "first_name", "last_name", "phone"]
+    required_columns = ["نام و نام خانوادگی", "شماره تماس"]
     for col in required_columns:
         if col not in df.columns:
             raise ValueError(f"ستون '{col}' در فایل موجود نیست.")
 
     for index, row in df.iterrows():
-        username = clean_string_field(row.get("username", f"user_{uuid.uuid4().hex[:8]}"))
-        first_name = clean_string_field(row.get("first_name", ""))
-        last_name = clean_string_field(row.get("last_name", ""))
-        phone = str(clean_string_field(row.get("phone", f"unknown_{uuid.uuid4().hex[:8]}")))
+        full_name = clean_string_field(row.get("نام و نام خانوادگی", ""))
+        phone = clean_string_field(row.get("شماره تماس", f"unknown_{uuid.uuid4().hex[:8]}"))
+        print(phone)
         if phone.startswith("+98"):
             phone = "0"+phone[3:]
         elif phone.startswith("9"):
             phone = "0"+phone
-        user, created = User.objects.get_or_create(username=username)
+        random_username = generate_username(phone=phone)
+        user, created = User.objects.get_or_create(phone_number = phone)
+        first_name,last_name= full_name.split()
         user.first_name = first_name
         user.last_name = last_name
         user.phone = phone
         user.save()
-        # مطمئن شدن که این کاربر تماس‌گیرنده است
         if not is_caller_user(user):
             ProjectCaller.objects.get_or_create(caller=user)  # اضافه شدن به جدول تماس‌گیرنده‌ها
 
         if created:
-            created_callers.append(user.username)
+            created_callers.append(random_username)
 
     return created_callers
 

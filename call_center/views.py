@@ -485,6 +485,7 @@ class ProjectViewSet(viewsets.ModelViewSet):
             }, status=status.HTTP_403_FORBIDDEN)
 
         file = request.FILES.get("file")
+        print(file)
         if not file:
             return Response({"error": "فایل ارسال نشده است"}, status=status.HTTP_400_BAD_REQUEST)
 
@@ -505,9 +506,9 @@ class ProjectViewSet(viewsets.ModelViewSet):
                     "error": f"خطا در خواندن فایل اکسل: {str(e)}"
                 }, status=status.HTTP_400_BAD_REQUEST)
             # بررسی وجود ستون شماره تلفن
-            if ('phone_number' and "first_name" and "last_name" not in df.columns):
+            if ('نام و نام خانوادگی' and "شماره تماس" not in df.columns):
                 return Response({
-                    "error": "ستون های  ';last_name','first_name',' phone_number'  الزامی است",
+                    "error": "ستون های  ' نام و نام خانوادگی ',' شماره تماس'  الزامی است",
                     "required_columns": ["phone_number"],
                     "available_columns": list(df.columns)
                 }, status=status.HTTP_400_BAD_REQUEST)
@@ -530,9 +531,8 @@ class ProjectViewSet(viewsets.ModelViewSet):
                 for index, row in df.iterrows():
                     try:
                         # تمیز کردن شماره تلفن
-                        phone_number = clean_string_field(str(row.get('phone_number', '')))
-                        first_name = clean_string_field(str(row.get("first_name","")))
-                        last_name = clean_string_field(str(row.get("last_name","")))
+                        phone_number = clean_string_field(str(row.get('شماره تماس', '')))
+                        full_name = clean_string_field(str(row.get("نام و نام خانوادگی","")))
                         if not phone_number or phone_number == 'nan':
                             failed_callers.append({
                                 'row': index + 2,
@@ -544,6 +544,7 @@ class ProjectViewSet(viewsets.ModelViewSet):
 
                         # نرمال‌سازی و اعتبارسنجی شماره تلفن
                         try:
+
                             normalized_phone = normalize_phone_number(phone_number)
                             if not validate_phone_number(normalized_phone):
                                 failed_callers.append({
@@ -565,6 +566,7 @@ class ProjectViewSet(viewsets.ModelViewSet):
                             normalized_phone = "0" + normalized_phone
                             user = CustomUser.objects.get(phone_number=normalized_phone)
                         except CustomUser.DoesNotExist:
+                            first_name,last_name = full_name.split(maxsplit=1)
                             user = CustomUser.objects.create(phone_number=normalized_phone,first_name=first_name,
                                                              last_name=last_name,username=generate_username(normalized_phone))
                         # بررسی اینکه آیا کاربر قبلاً عضو پروژه است
