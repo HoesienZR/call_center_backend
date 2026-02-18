@@ -694,4 +694,52 @@ class CallExcelSerializer(serializers.ModelSerializer):
             selected_choice_text = getattr(answer, 'selected_choice', '')  # Adjust attribute name if different
             formatted_answers.append(f"{question_text} {selected_choice_text}  |")
         return "\n".join(formatted_answers) if formatted_answers else ""
-# 2. سریالایزر برای مدیریت نقش کاربران در پروژه
+
+
+class ProjectExcelSerializer(serializers.ModelSerializer):
+    contact_name = serializers.CharField(source='contact.full_name', read_only=True)
+    contact_phone = serializers.CharField(source='contact.phone', read_only=True)
+    project_name = serializers.CharField(source='project.name', read_only=True)
+    contact_gender = serializers.CharField(source='contact.gender', read_only=True)
+    special_contact = serializers.CharField(source='contact.is_special', read_only=True)
+    contact_birth_date = serializers.CharField(source='contact.birth_date', read_only=True)
+    caller_phone = serializers.SerializerMethodField()
+    call_result_display = serializers.CharField(source='get_call_result_display', read_only=True)
+    call_status_display = serializers.CharField(source='get_status_display', read_only=True)
+    custom_fields = serializers.SerializerMethodField()
+    caller_name = serializers.CharField(source='caller.get_full_name', read_only=True)
+    address = serializers.CharField(source="contact.address", read_only=True)
+    persian_date = serializers.SerializerMethodField()
+
+    class Meta:
+        model = Call
+        fields = [
+            "caller_name", "contact_name", "contact_phone", "contact_gender",
+            "special_contact", "contact_birth_date", "project_name", "caller_phone",
+            "call_result_display", "call_status_display", "notes", "duration",
+            "call_date", "persian_date", "custom_fields", "address"
+        ]
+
+    def get_persian_date(self, obj):
+        # Ensure this returns a clean string
+        return str(JalaliDate(obj.call_date.date()))
+
+    def get_caller_phone(self, obj):
+        return obj.caller.phone_number
+
+    def get_custom_fields(self, obj):
+        return obj.contact.custom_fields
+
+    def to_representation(self, instance):
+        # Get the standard fields from Meta.fields
+        data = super().to_representation(instance)
+
+        # Map answers to the dictionary
+        # We use .all() because you have prefetch_related('answers') in the view
+        for answer in instance.answers.all():
+            column_name = answer.question.text
+            # Use choice text if available, otherwise fallback to a text field
+            val = answer.selected_choice.text if answer.selected_choice else getattr(answer, 'answer_text', "")
+            data[column_name] = val or ""
+
+        return data

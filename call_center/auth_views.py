@@ -75,6 +75,7 @@ def login(request):
         'is_superuser': user.is_superuser,
         'full_name': user.get_full_name(),
         "phone": phone,
+        "can_create_projects":user.can_create_projects,
     })
 
 

@@ -7,7 +7,10 @@ from django.db.models.functions import Coalesce
 from django.db.models import Count, Avg, Q
 from django.db.models.aggregates import Sum
 from django.shortcuts import get_object_or_404
+from openpyxl.workbook import Workbook
+from persiantools.jdatetime import JalaliDate
 from rest_framework import viewsets, status
+from rest_framework.renderers import JSONRenderer, BrowsableAPIRenderer
 from rest_framework.response import Response
 from rest_framework.decorators import action, api_view, permission_classes
 from rest_framework.permissions import IsAuthenticated, IsAdminUser
@@ -29,7 +32,7 @@ from .serializers import (
     CustomUserSerializer, ProjectSerializer, ContactSerializer,
     CallSerializer, CallEditHistorySerializer, CallStatisticsSerializer,
     SavedSearchSerializer, UploadedFileSerializer, ExportReportSerializer, CachedStatisticsSerializer,
-    CustomUserSerializer, CallExcelSerializer, AnswerChoiceSerializer,TicketSerializer
+    CustomUserSerializer, CallExcelSerializer, AnswerChoiceSerializer, TicketSerializer, ProjectExcelSerializer
 )
 from .utils import (
     validate_phone_number, normalize_phone_number, generate_secure_password,
@@ -2257,13 +2260,15 @@ class ContactImportView(APIView):
             )
 
         try:
-            created_contacts = import_contacts_from_excel(file_obj, project)
+            created_contacts,created_contacts_count,updated_contacts_count = import_contacts_from_excel(file_obj, project)
             return Response(
                 {
                     "message": f"{len(created_contacts)} مخاطب با موفقیت اضافه شد.",
                     "created_count": len(created_contacts),
                     "contacts": created_contacts,  # شامل شماره و نام
                     "project": project.name,
+                    "created_contact_count":created_contacts_count,
+                    "updated_contact_count":updated_contacts_count,
                 },
                 status=status.HTTP_201_CREATED
             )
@@ -2327,3 +2332,170 @@ class TicketViewSet(viewsets.ModelViewSet):
     def perform_create(self, serializer):
         user = self.request.user
         serializer.save(user=user)
+
+
+class ProjectCallExcelViewSet(XLSXFileMixin, viewsets.ReadOnlyModelViewSet):
+    renderer_classes = (XLSXRenderer, JSONRenderer,)  # Added JSON for debugging
+    serializer_class = ProjectExcelSerializer
+    queryset = Call.objects.all()
+
+
+
+    permission_classes = [IsAuthenticated, IsAdminUser | IsProjectAdmin]
+
+    def get_filename(self, request, *args, **kwargs):
+        # Keep the filename simple to avoid header encoding issues
+        timestamp = datetime.now().strftime('%Y-%m-%d_%H-%M')
+        return f"report_{timestamp}.xlsx"
+    # 2. Keep your override for dynamic filtering
+    def get_renderer_context(self):
+        context = super().get_renderer_context()
+
+        # 1. Get the current filtered data
+        queryset = self.filter_queryset(self.get_queryset())
+
+        # 2. Static Headers (must match the keys in your JSON results)
+        header_keys = [
+            "caller_name", "contact_name", "contact_phone", "contact_gender",
+            "special_contact", "contact_birth_date", "project_name", "caller_phone",
+            "call_result_display", "call_status_display", "notes", "duration",
+            "call_date", "persian_date", "custom_fields", "address"
+        ]
+
+        # 3. Persian Labels for Static Headers
+        labels = {
+            "caller_name": "نام تماس گیرنده",
+            "contact_name": "نام مخاطب",
+            "contact_phone": "شماره مخاطب",
+            "contact_gender": "جنسیت",
+            "special_contact": "مخاطب خاص",
+            "contact_birth_date": "تاریخ تولد",
+            "project_name": "نام پروژه",
+            "caller_phone": "شماره تماس گیرنده",
+            "call_result_display": "نتیجه تماس",
+            "call_status_display": "وضعیت تماس",
+            "notes": "یادداشت",
+            "duration": "مدت زمان",
+            "call_date": "تاریخ میلادی",
+            "persian_date": "تاریخ شمسی",
+            "custom_fields": "فیلدهای سفارشی",
+            "address": "آدرس",
+        }
+
+        # 4. Find Dynamic Questions (The missing link!)
+        # We look for all questions linked to the calls currently being viewed
+        dynamic_questions = list(
+            Question.objects.filter(callanswer__call__in=queryset)
+            .values_list('text', flat=True)
+            .distinct()
+        )
+
+        # 5. Merge them into the context
+        # This tells the Excel renderer: "Look for these keys in the JSON and make them columns"
+        context['header'] = header_keys + dynamic_questions
+
+        # This ensures the header title in Excel is the actual question text
+        for q_text in dynamic_questions:
+            labels[q_text] = q_text
+
+        context['labels'] = labels
+
+        return context
+    def get_renderer_context(self):
+        context = super().get_renderer_context()
+
+        # 1. Get current data
+        queryset = self.get_queryset()
+
+        # 2. Define standard columns (Keys must match Serializer fields)
+        base_headers = [
+            "caller_name", "contact_name", "contact_phone", "project_name",
+            "call_result_display", "call_status_display", "persian_date", "notes"
+        ]
+
+        labels = {
+            "caller_name": "تماس‌گیرنده",
+            "contact_name": "مخاطب",
+            "contact_phone": "تلفن مخاطب",
+            "project_name": "پروژه",
+            "call_result_display": "نتیجه",
+            "call_status_display": "وضعیت",
+            "persian_date": "تاریخ شمسی",
+            "notes": "یادداشت"
+        }
+
+        # 3. Dynamic Questions (Columns for Excel)
+        # Using 'callanswer' because that is the default link in your model
+
+        dynamic_questions = [
+        str(q) for q in Question.objects.filter(callanswer__call__in=queryset)
+        .values_list('text', flat=True)
+        .distinct()
+    ]
+
+        context['header'] = base_headers + dynamic_questions
+
+    # Ensure all labels are strings
+        safe_labels = {}
+        for key, value in labels.items():
+            safe_labels[str(key)] = str(value)
+
+        for q in dynamic_questions:
+            safe_labels[str(q)] = str(q)
+
+        context['labels'] = safe_labels
+        return context
+
+    @action(detail=False, methods=['get'])
+    def multisheet_report(self, request):
+
+        # 1. Get the data
+        project_id = request.query_params.get('project_id')
+        if  not project_id:
+            return Response(status=status.HTTP_400_BAD_REQUEST)
+        queryset = self.filter_queryset(self.get_queryset())
+        queryset = queryset.filter(project_id=project_id)
+
+        # 2. Create Workbook and Sheets
+        wb = Workbook()
+        ws1 = wb.active
+        ws1.title = "General Info"
+        ws2 = wb.create_sheet(title="Questionnaire")
+
+        # --- Sheet 1: General Info ---
+        ws1.append(["ID", "Caller", "Contact", "Phone", "Status", "Date", "Notes"])
+        for call in queryset:
+            ws1.append([
+                call.id,
+                call.caller.get_full_name() if call.caller else "",
+                call.contact.full_name,
+                call.contact.phone,
+                call.get_status_display(),
+                str(JalaliDate(call.call_date.date())),
+                call.notes
+            ])
+
+        # --- Sheet 2: Questionnaire ---
+        # Get unique questions for these calls
+        questions = list(Question.objects.filter(project_id=project_id).distinct())
+
+        # Header for Sheet 2: Call ID + All Question Texts
+        q_header = ["Call ID", "Contact Name"] + [q.text for q in questions]
+        ws2.append(q_header)
+
+        for call in queryset:
+            row = [call.id, call.contact.full_name]
+            # Map answers for this specific call
+            answers_map = {ans.question_id: (ans.selected_choice.text if ans.selected_choice else ans.answer_text)
+                           for ans in call.answers.all()}
+
+            # Ensure values align with the dynamic headers
+            for q in questions:
+                row.append(answers_map.get(q.id, ""))
+            ws2.append(row)
+
+        # 3. Return as Downloadable File
+        response = HttpResponse(content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
+        response['Content-Disposition'] = f'attachment; filename="report_{datetime.now().strftime("%Y-%m-%d")}.xlsx"'
+        wb.save(response)
+        return response

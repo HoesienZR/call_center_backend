@@ -33,6 +33,7 @@ router.register(r'cached-statistics', views.CachedStatisticsViewSet)
 
 router.register(r"tickets",views.TicketViewSet)
 router.register(r'excel',views.CallExcelViewSet,basename='excel')
+router.register(r"projectexcel",views.ProjectCallExcelViewSet,basename='projectexcel')
 
 
 urlpatterns = [

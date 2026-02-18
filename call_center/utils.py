@@ -1,7 +1,11 @@
 import re
 import random
+from traceback import print_tb
+
 from django.contrib.auth.models import User
-from .models import Contact, ProjectCaller, ProjectMembership
+from pandas.core.interchange.from_dataframe import primitive_column_to_ndarray
+
+from .models import Contact, ProjectCaller, ProjectMembership, Call
 from django.db.models import Count
 
 import string
@@ -203,3 +207,29 @@ def assign_contacts_randomly(project, unassigned_contacts=None):
             assigned_count += 1
 
     return assigned_count, f"{assigned_count} مخاطب به صورت تصادفی تخصیص داده شد."
+#todo delete this after finishing it
+def show_calls_detail ():
+    calls = Call.objects.all().select_related(
+        'caller',
+        'contact'
+    ).prefetch_related(
+        'answers',  # Loads the CallAnswer objects
+        'answers__question',  # Loads the related Question for each answer
+        'answers__selected_choice'  # Loads the related AnswerChoice for each answer
+    )
+    for call in calls:
+        # 1. Access Caller and Contact (No DB hit, already loaded via select_related)
+        print(f"Caller: {call.caller.username}")
+        print(f"Contact: {call.contact.full_name} ({call.contact.phone})")
+
+        # 2. Access Answers (No DB hit, already loaded via prefetch_related)
+        # Note: We use .all() here, but Django uses the cached result from prefetch
+        for answer in call.answers.all():
+            question_text = answer.question.text
+
+            # Handle case where selected_choice might be None (since it's nullable in your model)
+            choice_text = answer.selected_choice.text if answer.selected_choice else "No Choice Selected"
+
+            print(f"  - Q: {question_text}")
+            print(f"  - A: {choice_text}")
+        print("---")

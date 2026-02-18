@@ -622,6 +622,7 @@ class ContactLog(models.Model):
 
     def __str__(self):
         return f"{self.action} - {self.contact.full_name} at {self.timestamp}"
+
 class Question(models.Model):
     """مدل برای سوالات مرتبط با پروژه"""
     project = models.ForeignKey(Project, on_delete=models.CASCADE, related_name='questions', verbose_name="پروژه")
