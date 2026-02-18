@@ -74,13 +74,13 @@ def import_contacts_from_excel(file_obj, project: Project):
         df = pd.read_csv(file_obj, dtype=str)
 
 
-    required_columns = ["نام کامل", "شماره مخاطب"]
+    required_columns = ["نام و نام خانوادگی", "شماره تماس"]
     for col in required_columns:
         if col not in df.columns:
             raise ValueError(f"ستون '{col}' در فایل موجود نیست.")
     for index, row in df.iterrows():
-        full_name = clean_string_field(row.get("نام کامل", "نامشخص"))
-        raw_phone = clean_string_field(row.get("شماره مخاطب", "")).strip()
+        full_name = clean_string_field(row.get("نام و نام خانوادگی", "نامشخص"))
+        raw_phone = clean_string_field(row.get("شماره تماس", "")).strip()
 
         assigned_caller_phone = clean_string_field(row.get("شماره تماس گیرنده مربوطه", ""))
         custom_fields = clean_string_field(row.get('فیلد سفارشی',""))
