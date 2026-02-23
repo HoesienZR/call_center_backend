@@ -48,6 +48,8 @@ def normalize_phone_number(phone):
     # تبدیل به فرمت استاندارد
     if phone.startswith('+98'):
         phone = '0' + phone[3:]
+    if phone.startswith("9"):
+        phone = "0"+phone
     elif phone.startswith('0098'):
         phone = '0' + phone[4:]
     elif phone.startswith('98') and len(phone) == 12:

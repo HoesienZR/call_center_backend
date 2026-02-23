@@ -21,25 +21,30 @@ def import_callers_from_excel(file_obj):
     except Exception:
         df = pd.read_csv(file_obj, dtype=str)
 
-    required_columns = ["نام و نام خانوادگی", "شماره تماس"]
+    required_columns = ["نام و نام خانوادگی", "شماره تماس","رمز"]
     for col in required_columns:
+        print(col)
         if col not in df.columns:
             raise ValueError(f"ستون '{col}' در فایل موجود نیست.")
 
     for index, row in df.iterrows():
         full_name = clean_string_field(row.get("نام و نام خانوادگی", ""))
         phone = clean_string_field(row.get("شماره تماس", f"unknown_{uuid.uuid4().hex[:8]}"))
+        password = clean_string_field(row.get("رمز",))
         print(phone)
         if phone.startswith("+98"):
             phone = "0"+phone[3:]
         elif phone.startswith("9"):
             phone = "0"+phone
         random_username = generate_username(phone=phone)
-        user, created = User.objects.get_or_create(phone_number = phone)
+
+        user, created = User.objects.update_or_create(phone_number = phone)
         first_name,last_name= full_name.split()
+        user.username = random_username
         user.first_name = first_name
         user.last_name = last_name
         user.phone = phone
+        user.password = password
         user.save()
         if not is_caller_user(user):
             ProjectCaller.objects.get_or_create(caller=user)  # اضافه شدن به جدول تماس‌گیرنده‌ها
