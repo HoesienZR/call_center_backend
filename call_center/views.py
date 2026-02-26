@@ -11,7 +11,7 @@ from django.db.models.aggregates import Sum
 from django.shortcuts import get_object_or_404
 from openpyxl.workbook import Workbook
 from persiantools.jdatetime import JalaliDate
-from rest_framework import viewsets, status
+from rest_framework import viewsets, status, generics
 from rest_framework.renderers import JSONRenderer, BrowsableAPIRenderer
 from rest_framework.response import Response
 from rest_framework.decorators import action, api_view, permission_classes
@@ -802,7 +802,6 @@ class ProjectViewSet(viewsets.ModelViewSet):
         دریافت لیست اعضای یک پروژه با اطلاعات کامل
         """
         project = self.get_object()
-        # دریافت تمام اعضای پروژه از طریق ProjectMembership
         memberships = ProjectMembership.objects.filter(project=project).exclude(role="admin").select_related('user')
 
         members_data = []
@@ -880,6 +879,7 @@ class ContactViewSet(viewsets.ModelViewSet):
             'format': self.format_kwarg,
             'view': self
         }
+
     #TODO this also need to get some changes
     def get_queryset(self):
         """
@@ -1169,6 +1169,35 @@ class ContactViewSet(viewsets.ModelViewSet):
             return Response({
                 "error": f"خطای داخلی سرور: {str(e)}"
             }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+    @action(detail=False, methods=['get'],url_path = "project_contacts",permission_classes=[IsAuthenticated,IsProjectAdmin])
+    def project_contacts(self, request):
+        project_id = request.query_params.get("project_id")
+
+        if not project_id:
+            return Response(
+                {"error": "project_id is required"},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        try:
+            project = Project.objects.get(id=project_id)
+            contacts = Contact.objects.filter(project=project)
+            serializer = ContactSerializer(contacts, many=True)
+
+            # Return as a dictionary, not wrapped in extra {}
+            return Response(serializer.data, status=status.HTTP_200_OK)
+
+        except Project.DoesNotExist:
+            return Response(
+                {"error": "Project not found"},
+                status=status.HTTP_404_NOT_FOUND
+            )
+        except ValueError:
+            return Response(
+                {"error": "Invalid project_id format"},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
 
     @action(detail=False, methods=['post'], url_path='request_new')
     def request_new_contact(self, request):
@@ -2505,3 +2534,54 @@ class ProjectCallExcelViewSet(XLSXFileMixin, viewsets.ReadOnlyModelViewSet):
         response['Content-Disposition'] = f'attachment; filename="report_{datetime.now().strftime("%Y-%m-%d")}.xlsx"'
         wb.save(response)
         return response
+
+
+class ProjectMemberBulkRemoveView(generics.GenericAPIView):
+    """حذف گروهی تماس گیرندگان از پروژه"""
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request, project_id):
+        user_ids = request.data.get('user_ids', [])
+
+        if not user_ids:
+            return Response(
+                {'error': 'لیست کاربران ارسال نشده است'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        # حذف همه تماس گیرندگان با آی‌دی‌های داده شده
+        deleted_count, _ = ProjectMembership.objects.filter(
+            project_id=project_id,
+            user_id__in=user_ids,
+            role='caller'
+        ).delete()
+
+        return Response({
+            'message': f'{deleted_count} تماس گیرنده با موفقیت حذف شدند',
+            'deleted_count': deleted_count
+        })
+
+
+class ProjectContactBulkRemoveView(generics.GenericAPIView):
+    """حذف گروهی مخاطبین از پروژه"""
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request, project_id):
+        contact_ids = request.data.get('contact_ids', [])
+
+        if not contact_ids:
+            return Response(
+                {'error': 'لیست مخاطبین ارسال نشده است'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        # حذف همه مخاطبین با آی‌دی‌های داده شده
+        deleted_count, _ = Contact.objects.filter(
+            project_id=project_id,
+            id__in=contact_ids
+        ).delete()
+
+        return Response({
+            'message': f'{deleted_count} مخاطب با موفقیت حذف شدند',
+            'deleted_count': deleted_count
+        })

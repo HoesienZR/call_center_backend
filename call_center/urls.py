@@ -53,7 +53,12 @@ urlpatterns = [
     path('request-otp/', auth_views.request_otp, name='request-otp'),
     path('verify-otp/', auth_views.verify_otp, name='verify-otp'),
     path("projects/<int:project_id>/import-contacts/", views.ContactImportView.as_view(), name="import_contacts"),
-
+    path('projects/<int:project_id>/members/bulk-remove/',
+         views.ProjectMemberBulkRemoveView.as_view(),
+         name='project-member-bulk-remove'),
+    path('projects/<int:project_id>/contacts/bulk-remove/',
+         views.ProjectContactBulkRemoveView.as_view(),
+         name='project-contact-bulk-remove'),
 ]
 
 
